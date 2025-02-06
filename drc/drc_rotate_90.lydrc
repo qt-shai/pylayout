@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>drc</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>drc_scripts</group-name>
+ <menu-path>tools_menu.drc.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>drc-dsl-xml</dsl-interpreter-name>
+ <text># DRC Script to Rotate All Shapes in Layer (1, 0) by 90 Degrees
+
+# Load the specific layer (1, 0)
+original_layer = input(1, 0)
+
+# Define a 90-degree rotation transformation
+rotation = RBA::ICplxTrans::new(1.0, 90, false, 0, 0)
+
+# Apply the transformation to all shapes in the layer
+rotated_layer = original_layer.transformed(rotation)
+
+# Output the transformed shapes to the original layer
+rotated_layer.output(1, 0)
+</text>
+</klayout-macro>
