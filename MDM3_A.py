@@ -1197,6 +1197,136 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
     return c
 
+
+
+
+
+def create_long_waveguide(start: tuple, end: tuple, length: float, width: float = 0.5,
+                          layer: tuple = (1, 0), arc_radius: float = 22,
+                          support_width: float = 0.6, support_length: float = 3, support_spacing: float = 20,
+                          taper_length: float = 10, taper_width1: float = 0.08):
+    """
+    Creates a long waveguide with defined start and end points using straights and arcs,
+    adding supports and subtracting the waveguide (with tapers & supports) from a wider path.
+
+    Args:
+        start (tuple): Starting coordinates of the waveguide (x, y).
+        end (tuple): Ending coordinates of the waveguide (x, y).
+        length (float): Total length of the waveguide.
+        width (float): Width of the waveguide. Default is 0.5 µm.
+        layer (tuple): The GDS layer for the waveguide. Default is (1, 0).
+        arc_radius (float): The radius of arc segments used in the path. Default is 22 µm.
+        support_width (float): Width of the support structures. Default is 0.6 µm.
+        support_length (float): Length of the support structures. Default is 3 µm.
+        support_spacing (float): Distance between support structures. Default is 20 µm.
+        taper_length (float): Length of the taper. Default is 10 µm.
+        taper_width1 (float): Starting width of the taper. Default is 0.08 µm.
+
+    Returns:
+        gf.Component: The generated waveguide component with supports and subtracted wider path.
+    """
+    component = gf.Component()
+
+    # Calculate total Euclidean distance between start and end
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+
+    distance = np.sqrt(dx ** 2 + dy ** 2)
+
+    if distance > length:
+        raise ValueError("The specified length is shorter than the straight-line distance between start and end points.")
+
+
+    # Define waveguide path (excluding tapers for now)
+    path = gf.Path()
+    first_straight_length = length/2-distance / 2 - taper_length  # Adjusted first segment
+    vertical_straight_length = dy -arc_radius*2 # Vertical section
+    last_straight_length = length/2-distance / 2 - taper_length  # Adjusted final segment
+
+    path.append(gf.path.straight(length=first_straight_length))
+    path.append(gf.path.arc(radius=arc_radius, angle=90))
+    path.append(gf.path.straight(length=vertical_straight_length))
+    path.append(gf.path.arc(radius=arc_radius, angle=90))
+    path.append(gf.path.straight(length=last_straight_length))
+
+    # Create waveguide with tapers and supports
+    waveguide_with_supports = gf.Component()
+
+    # Add tapers to waveguide_with_supports
+    taper = gf.components.taper(length=taper_length, width1=taper_width1, width2=width, layer=layer)
+    taper_start = waveguide_with_supports.add_ref(taper)
+    taper_start.move(start)
+
+    waveguide = gf.path.extrude(path, layer=layer, width=width)
+    waveguide_ref = waveguide_with_supports.add_ref(waveguide)
+    waveguide_ref.move((start[0] + taper_length, start[1]))  # Move after taper
+
+    taper_end = waveguide_with_supports.add_ref(taper)
+    taper_end.move((start[0], start[1]+vertical_straight_length+arc_radius*2))
+
+    # Function to add support structures inside waveguide_with_supports
+    def add_supports_along_straight(x_start, y_start, length, is_vertical=False):
+        num_supports = int(length // support_spacing)  # Calculate number of supports
+        for i in range(1, num_supports + 1):
+            if is_vertical:
+                support_x = x_start  # X remains the same
+                support_y = y_start + i * support_spacing  # Increment Y for vertical section
+                support_y = round(y_start + i * support_spacing, -1)  # Snap Y to nearest 10 µm
+            else:
+                support_x = x_start + i * support_spacing  # Increment X for horizontal section
+                support_y = y_start  # Y remains the same
+
+            # Create support component
+            support = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
+
+            if is_vertical:
+                # Flip Up-Down correctly
+                waveguide_with_supports.add_ref(support).drotate(0).move((support_x, support_y + support_length))
+                waveguide_with_supports.add_ref(support).drotate(180).move((support_x, support_y + support_length))
+                # Flip Left-Right correctly
+                waveguide_with_supports.add_ref(support).drotate(90).move((support_x, support_y))
+                waveguide_with_supports.add_ref(support).drotate(270).move((support_x, support_y+support_length*2))
+            else:
+                # Correct horizontal placement
+                waveguide_with_supports.add_ref(support).drotate(90).move((support_x, support_y + width))  # Up
+                waveguide_with_supports.add_ref(support).drotate(270).move((support_x, support_y - width))  # Down
+                waveguide_with_supports.add_ref(support).move((support_x - support_length, support_y))  # Left
+                waveguide_with_supports.add_ref(support).drotate(180).move((support_x + support_length, support_y))  # Right
+
+    # Add supports in first horizontal section
+    add_supports_along_straight(start[0] + taper_length, start[1], first_straight_length, is_vertical=False)
+
+    # Add supports in vertical section
+    upward_section_start_x = start[0] + first_straight_length + arc_radius+taper_length
+    upward_section_start_y = start[1] + arc_radius / 2
+    add_supports_along_straight(upward_section_start_x, upward_section_start_y, vertical_straight_length, is_vertical=True)
+
+    # Add supports in last horizontal section
+    last_section_start_x = start[0]
+    last_section_start_y = upward_section_start_y + vertical_straight_length + arc_radius * 3 / 2
+    add_supports_along_straight(last_section_start_x, last_section_start_y, last_straight_length, is_vertical=False)
+
+    # Generate the **wider path** that will be used for subtraction
+    wider_width = support_length * 2
+    # Extend the wider path by adding a 10 µm straight section at the beginning and end
+    wider_path = gf.Path()
+    wider_path.append(gf.path.straight(length=taper_length))  # 10 µm extension
+    wider_path.append(path)  # Original path
+    wider_path.append(gf.path.straight(length=taper_length))  # 10 µm extension
+
+    wider_waveguide = gf.path.extrude(wider_path, layer=layer, width=wider_width)
+    wider_waveguide_ref = component.add_ref(wider_waveguide)
+    wider_waveguide_ref.move((start[0], start[1]))
+
+    # Subtract the entire waveguide (with tapers and supports) from the wider waveguide
+    cutout_component = gf.boolean(A=wider_waveguide_ref, B=waveguide_with_supports, operation="A-B", layer=layer)
+    component.add_ref(cutout_component)
+
+    return cutout_component
+
+
+
+
 def create_design(clearance_width=40):
     length_mmi = 79
     total_width_mmi = 10
@@ -1216,7 +1346,23 @@ def create_design(clearance_width=40):
     bbox_component = create_bbox_component(length_mmi=length_mmi, total_width_mmi=total_width_mmi,taper_length=params["taper_length_in"],
                                            clearance_width=clearance_width)
 
-    # taper_length
+    arc_radius = 35
+    wg_length = 830
+    offset_step = 10
+    length_step = 34
+    radius_step = 3
+
+    for i in range(5):
+        start_y = offset_y - (70 - i * offset_step)
+        end_y = offset_y + (280 - i * offset_step)
+
+        c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius)).flatten()
+
+        # Decrease arc radius and waveguide length for the next iteration
+        arc_radius -= radius_step
+        wg_length -= length_step
+
+
     c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"]-10).flatten()
     width_resonator = 0.42 if params["resonator_type"]=="fish" else 0.54
     c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-6.5, short_taper_width2_right=width_resonator,
@@ -1350,17 +1496,50 @@ def create_design(clearance_width=40):
 
     c.add_ref(gf.components.straight(length=clearance_width,width=offset_y+20,layer=(1,0))).dmovex(-clearance_width).dmovey(offset_y/2-3).flatten()
 
-    c.show()
+    # c.show()
     return c
+
+
+def merge_layer(component, layer=(1, 0)):
+    """
+    Merges overlapping or adjacent shapes in the specified layer.
+
+    Args:
+        component (gf.Component): The input photonic component.
+        layer (tuple): The GDS layer to merge (default: (1, 0)).
+
+    Returns:
+        gf.Component: A new component with merged shapes.
+    """
+    # Extract all polygons in the given layer
+    layer_shapes = component.extract(layers=[layer])
+
+    # Check if there are any polygons in the layer
+    if not layer_shapes or not layer_shapes.get_polygons():
+        print(f"⚠️ Warning: No shapes found in layer {layer}. Skipping merge operation.")
+        return component  # Return the original component
+
+    # Merge adjacent or overlapping polygons
+    merged_shapes = gf.boolean(A=layer_shapes, B=layer_shapes, operation="or", layer=layer)
+
+    # Create a new component to store the merged result
+    merged_component = gf.Component("Merged_Design")
+    merged_component.add_ref(merged_shapes)
+
+    return merged_component
 
 
 def main(): 
     component = create_design(clearance_width=40)
+    merged_component = merge_layer(component, layer=(1, 0))
+
     today_date = datetime.now().strftime("%d-%m-%y")
     base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
     # base_directory = r"C:\PyLayout\PyLayout"
     output_file = os.path.join(base_directory, f"MDMA-{today_date}.gds")
-    component.write_gds(output_file)
+
+    # merged_component.write_gds(output_file)
+    merged_component.show()
     print(f"Design saved to {output_file}")
 
 if __name__ == "__main__":
