@@ -196,16 +196,16 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     cnt2 = s2_ref.ports["o2"].center[0]
 
     s3_l = .92
-    s3 = gf.components.taper(length=s3_l, width1=0.6, width2=0.2, layer=layer)
+    s3 = gf.components.taper(length=s3_l+2, width1=1.5, width2=0.2, layer=layer)
     s3_ref = gf.Component().add_ref(s3).drotate(90)
-    s3_ref.dmove((cnt1 / 1000, -s3_l / 2 + .3))
+    s3_ref.dmove((cnt1 / 1000, -s3_l / 2 - 1.5))
 
-    s4 = gf.components.taper(length=s3_l, width1=0.2, width2=0.2, layer=layer)
+    s4 = gf.components.taper(length=s3_l, width1=1, width2=0.2, layer=layer)
     s4_ref = gf.Component().add_ref(s4).drotate(270)
     s4_ref.dmove((cnt1 / 1000, s3_l / 2 + 1.6))
 
     s5_ref = gf.Component().add_ref(s3).drotate(90)
-    s5_ref.dmove((cnt2 / 1000, -s3_l / 2 + .3))
+    s5_ref.dmove((cnt2 / 1000, -s3_l / 2 - 1.5))
     s6_ref = gf.Component().add_ref(s4).drotate(270)
     s6_ref.dmove((cnt2 / 1000, s3_l / 2 + 1.6))
 
@@ -219,7 +219,7 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     bot_waveguide = gf.Component().add_ref(top_waveguide).mirror_y().dmovey(4.12)
     dc = gf.boolean(A=top_waveguide, B=bot_waveguide, operation="or", layer=layer)
 
-    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 27.3, width=4.4, layer=layer)).dmovex(-15).dmovey(width+1.8)
+    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 27.3, width=8, layer=layer)).dmovex(-15).dmovey(width+1.8)
     dc_positive = gf.boolean(A=A, B=dc, operation="A-B", layer=layer)
 
     return dc_positive
@@ -1152,7 +1152,11 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
                 y_spacing-1.5+arc_radius),operation='or')
             component.show()
 
-    support = component.add_ref(gf.components.straight(length=0.3, width=6)).dmovex(taper_length + 2 - 0.15).dmovey(y_spacing)
+    support = component.add_ref(gf.components.straight(length=0.3, width=6)).dmovex(taper_length + 2 - 0.15).dmovey(0)
+    component.add_ref(gf.components.taper(width1=0.3, width2=1, length=3)).drotate(90).dmovex(taper_length + short_taper_length).dmovey(-1.5+y_spacing) #
+    # Taper supports
+    component.add_ref(gf.components.taper(width1=0.3, width2=1, length=3)).drotate(90).dmovex(taper_length + short_taper_length).mirror_y().dmovey(
+        -1.5+y_spacing)
 
     # Corrected layer handling for merging and subtracting
     layers_to_merge = [layer] if isinstance(layer, tuple) else [tuple(layer)]
@@ -1162,12 +1166,12 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
     if component_type == "smw":
         bbox = component.add_ref(
-            gf.components.straight(length=taper_length + 4, width=2)
+            gf.components.straight(length=taper_length + 4, width=5)
         ).dmovey(y_spacing - 1.5)
 
         # Add second bounding box for arc/taper
         bbox_arc = component.add_ref(
-            gf.components.bend_circular(radius=arc_radius, angle=180, layer=layer, width=2)
+            gf.components.bend_circular(radius=arc_radius, angle=180, layer=layer, width=5)
         ).dmovey(y_spacing + 1.5)
 
         bbox_arc.connect(port="o2", other=short_taper_ref3.ports["o1"], allow_width_mismatch=True)
@@ -1182,7 +1186,7 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
     else:
         bbox = component.add_ref(
-            gf.components.straight(length=taper_length + 9.3, width=2)
+            gf.components.straight(length=taper_length + 9.3, width=5)
         ).dmovey(y_spacing - 1.5)
 
     bbox=gf.boolean(A=component.add_ref(gf.components.straight(length=20, width=10)).dmovey(y_spacing - 1.5).dmovex(-20),B=bbox,operation="or",layer=layer)
@@ -1267,17 +1271,16 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
     # Function to add support structures inside waveguide_with_supports
     def add_supports_along_straight(x_start, y_start, length, is_vertical=False):
         num_supports = int(length // support_spacing)  # Calculate number of supports
-        for i in range(1, num_supports + 1):
+        # Create support component
+        support = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
+        for i in range(1, num_supports + 1 + (1 if is_vertical else 0)):
             if is_vertical:
                 support_x = x_start  # X remains the same
                 support_y = y_start + i * support_spacing  # Increment Y for vertical section
-                support_y = round(y_start + i * support_spacing, -1)  # Snap Y to nearest 10 µm
+                # support_y = round(y_start + i * support_spacing, -1)  # Snap Y to nearest 10 µm
             else:
                 support_x = x_start + i * support_spacing  # Increment X for horizontal section
                 support_y = y_start  # Y remains the same
-
-            # Create support component
-            support = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
 
             if is_vertical:
                 # Flip Up-Down correctly
@@ -1318,6 +1321,11 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
     wider_waveguide_ref = component.add_ref(wider_waveguide)
     wider_waveguide_ref.move((start[0]-clearance_width, start[1]))
 
+    clearance_rect = gf.Component().add_ref(gf.components.straight(length=clearance_width,width=10)).move((start[0]-clearance_width, start[1]))
+    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref, B=clearance_rect, operation='or')
+    clearance_rect = gf.Component().add_ref(gf.components.straight(length=clearance_width, width=10)).move((start[0] - clearance_width, end[1]))
+    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref,B=clearance_rect,operation='or')
+
     # Subtract the entire waveguide (with tapers and supports) from the wider waveguide
     cutout_component = gf.boolean(A=wider_waveguide_ref, B=waveguide_with_supports, operation="A-B", layer=layer)
     component.add_ref(cutout_component)
@@ -1332,8 +1340,7 @@ def create_design(clearance_width=40):
     total_width_mmi = 10
     width_mmi = 6
     offset_y = 0
-    y_spacing = 40/2
-
+    y_spacing = 15
 
     c = gf.Component()
 
@@ -1347,115 +1354,87 @@ def create_design(clearance_width=40):
                                            clearance_width=clearance_width)
 
     arc_radius = 35
-    wg_length = 830
+    wg_length = 500
     offset_step = 10
-    length_step = 34
-    radius_step = 3
+    length_step = 40
 
     for i in range(5):
-        start_y = offset_y - (70 - i * offset_step)
-        end_y = offset_y + (280 - i * offset_step)
-
+        start_y = offset_y - (58 - i * offset_step)
+        end_y = offset_y + (166 - i * offset_step)
         c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius)).flatten()
-
-        # Decrease arc radius and waveguide length for the next iteration
-        arc_radius -= radius_step
         wg_length -= length_step
 
 
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"]-10).flatten()
     width_resonator = 0.42 if params["resonator_type"]=="fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
               taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
               taper_length=params["taper_length_in"])).flatten()
 
     params["resonator_type"] = "extractor"
     offset_y+=y_spacing
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"]-10).flatten()
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
               taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
               taper_length=params["taper_length_in"])).flatten()
 
     bbox_component = create_bbox_component(length_mmi, total_width_mmi,clearance_width=clearance_width)
     params["taper_length_in"] = 10
     offset_y += y_spacing
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"]-10).flatten()
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y , short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
 
     params["resonator_type"] = "fish"
     offset_y += y_spacing
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"]-10).flatten()
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
-
-    bbox_component = create_bbox_component(length_mmi, total_width_mmi-2,clearance_width=clearance_width)
 
     offset_y += y_spacing
     params["weird_support"]=True
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"] - 10).flatten()
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
 
     offset_y += y_spacing
     params["resonator_type"] = "extractor"
-    c.add_ref(add_mmi_patterns(c, bbox_component, params)).dmovey(offset_y).dmovex(params["taper_length_in"] - 10).flatten()
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 6.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - 10.5, short_taper_width2_right=width_resonator,
+    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                      short_taper_width2_right=width_resonator,
                                       taper_length=params["taper_length_in"])).flatten()
 
-
-    ##############################             SMW             #########################################
-
-    offset_y += 10
-    arc_radius=11
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten()
-    offset_y += 3
-    arc_radius-=3
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten()
-    offset_y += 3
-    arc_radius -= 3
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten() # arc_radius=5
-    offset_y += 20
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten() # arc_radius=5
-
-    offset_y += 14
-    arc_radius = 9
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten()  # arc_radius=6
-    offset_y += 3
-    arc_radius -= 3
-    c.add_ref(create_resonator_or_smw("smw", y_spacing=offset_y, arc_radius=arc_radius)).flatten() # arc_radius=6
 
     #######################################        DIRECTIONAL COUPLER           ###################
-    offset_y += 17
+    offset_y += 6
     params["resonator_type"] = "fish"
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
     c.add_ref(create_dc_design(resonator=params["resonator_type"],width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
 
-    offset_y += 6
+    offset_y += 11
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
     c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
 
-    offset_y += 6
+    offset_y += 11
     params["resonator_type"] = "extractor"
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
     c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
 
-    offset_y += 6
+    offset_y += 11
     width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
     c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
 
@@ -1464,10 +1443,10 @@ def create_design(clearance_width=40):
         add_bulls_eye(c, config["N_Bulls_eye"], 150)
 
     if config["add_logo"]:
-        c.add_ref(add_logos(c)).dmovex(20).dmovey(offset_y-40).dmovex(20).flatten()
+        c.add_ref(add_logos(c)).dmovex(20).dmovey(offset_y-50).dmovex(20).flatten()
 
     if config["add_scalebar"]:
-        add_scalebars(c, 30, offset_y-65)
+        add_scalebars(c, 25, offset_y-80)
 
     ###############################    CIRCULAR TEST PATTERN    #############
 
@@ -1488,11 +1467,11 @@ def create_design(clearance_width=40):
     c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(80).dmovey(offset_y - 40).flatten()
 
     ############################## TEXT !!!!!! #####################
-
-    for i in range(1, 7):  # Loop from 1 to 18
-        x_offset = 122  # Fixed x offset for all numbers
-        y_offset = -5 + (i - 1) * y_spacing  # Incremental y offset based on the number
-        c.add_ref(gf.components.text(text=str(i), size=5)).dmovex(x_offset).dmovey(y_offset).flatten()
+    #
+    # for i in range(1, 7):  # Loop from 1 to 18
+    #     x_offset = 122  # Fixed x offset for all numbers
+    #     y_offset = -5 + (i - 1) * y_spacing  # Incremental y offset based on the number
+    #     c.add_ref(gf.components.text(text=str(i), size=5)).dmovex(x_offset).dmovey(y_offset).flatten()
 
     c.add_ref(gf.components.straight(length=clearance_width,width=offset_y+20,layer=(1,0))).dmovex(-clearance_width).dmovey(offset_y/2-3).flatten()
 
@@ -1524,22 +1503,24 @@ def merge_layer(component, layer=(1, 0)):
 
     # Create a new component to store the merged result
     merged_component = gf.Component("Merged_Design")
-    merged_component.add_ref(merged_shapes)
+    merged_component.add_ref(merged_shapes).flatten()
 
     return merged_component
 
 
 def main(): 
-    component = create_design(clearance_width=20)
-    merged_component = merge_layer(component, layer=(1, 0))
+    c = merge_layer(create_design(clearance_width=20), layer=(1, 0))
+
+    overlap1=0.5
+    c.add_ref(gf.components.straight(length=50,width=250)).dmovey(62-8).dmovex(-70+overlap1)
 
     today_date = datetime.now().strftime("%d-%m-%y")
     base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
     # base_directory = r"C:\PyLayout\PyLayout"
     output_file = os.path.join(base_directory, f"MDMA-{today_date}.gds")
 
-    # merged_component.write_gds(output_file)
-    merged_component.show()
+    c.write_gds(output_file)
+    c.show()
     print(f"Design saved to {output_file}")
 
 if __name__ == "__main__":
