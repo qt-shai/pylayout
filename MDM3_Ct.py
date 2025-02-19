@@ -155,7 +155,7 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     # Parameters for the S-bend
     width = 0.25  # Waveguide width in micrometers
     length = 12  # Length of the S-bend in micrometers
-    dy = 2.93  # Vertical offset in micrometers
+    dy = 2.9  # Vertical offset in micrometers
     layer = (1, 0)
 
     # Load fish component
@@ -205,51 +205,22 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ext1t2.drotate(angle=-30)
     ext1t2.dmove((ext1.ports["o1"].x / 1000, ext1.ports["o1"].y / 1000 - 0.23))
 
-    ext2 = c.add_ref(gf.components.straight(length=0.6, width=8.7, layer=layer))
+    ext2 = c.add_ref(gf.components.straight(length=0.6, width=5.8, layer=layer))
     ext2.connect(port="o1", other=ext1.ports["o2"], allow_width_mismatch=True)
-    ext2.dmovey(dy-1.5)
 
-    spring_vertical1 = c.add_ref(gf.components.bend_euler(cross_section=x, angle=-90, radius=1.4)).drotate(90)
-    spring_vertical1.move((ext2.ports["o2"].x/1000+0.5, ext2.ports["o2"].y/1000+4.5))
-
-    spring_taper = c.add_ref(gf.components.taper(length=0.6,width1=1,width2=0.25,layer=layer))
-    spring_taper.connect(port="o2", other=spring_vertical1.ports["in"])
-    spring_vertical2 = c.add_ref(gf.components.straight(cross_section=x, length=3))
-    spring_vertical2.connect(port="in", other=spring_vertical1.ports["out"], allow_width_mismatch=True)
-    spring_vertical3 = c.add_ref(gf.components.bend_euler(cross_section=x, angle=-180, radius=0.3, npoints=12))
-    spring_vertical3.connect(port="in", other=spring_vertical2.ports["out"], allow_width_mismatch=True)
-    spring_vertical4 = c.add_ref(gf.components.straight(cross_section=x, length=3))
-    spring_vertical4.connect(port="in", other=spring_vertical3.ports["out"], allow_width_mismatch=True)
-    spring_vertical5 = c.add_ref(gf.components.bend_euler(cross_section=x, angle=180, radius=0.3, npoints=12))
-    spring_vertical5.connect(port="in", other=spring_vertical4.ports["out"], allow_width_mismatch=True)
-    spring_vertical6 = c.add_ref(gf.components.straight(cross_section=x,  length=3))
-    spring_vertical6.connect(port="in", other=spring_vertical5.ports["out"], allow_width_mismatch=True)
-    spring_vertical7 = c.add_ref(gf.components.bend_euler(cross_section=x, angle=90, radius=1))
-    spring_vertical7.connect(port="in", other=spring_vertical6.ports["out"], allow_width_mismatch=True)
-    spring_vertical8 = c.add_ref(gf.components.straight(length=.35, width=0.25, layer=layer))
-    spring_vertical8.connect(port="o1", other=spring_vertical7.ports["out"], allow_width_mismatch=True)
-    spring_taper_end = c.add_ref(gf.components.taper(length=0.5, width1=0.25,width2=1, layer=layer))
-    spring_taper_end.connect(port="o1", other=spring_vertical8.ports["o2"], allow_width_mismatch=True)
-
-
-    ext3 = c.add_ref(unite_array(gf.components.straight(length=.5, width=0.5, layer=layer), rows=5, cols=1, spacing=(3, 2.05)))
+    ext3 = c.add_ref(unite_array(gf.components.straight(length=.5, width=0.5, layer=layer), rows=3, cols=1, spacing=(3, 2.2)))
     ext3.connect(port="o1", other=ext2.ports["o2"], allow_width_mismatch=True)
-    ext3.dmovey(-4.25)
 
-    ext4 = c.add_ref(gf.components.straight(length=0.6, width=8.7, layer=layer))
+    ext4 = c.add_ref(gf.components.straight(length=0.6, width=5.8, layer=layer))
     ext4.connect(port="o1", other=ext3.ports["o2"], allow_width_mismatch=True)
-    ext4.dmovey( 4.25)
 
-    ext5 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=13, cols=1, spacing=(3, 0.7)))
+    ext5 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=9, cols=1, spacing=(3, 0.7)))
     ext5.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
-    ext5.dmovey( -4.25)
 
-    ext6 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=13, cols=1, spacing=(3, 0.7)))
+    ext6 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=10, cols=1, spacing=(3, 0.7)))
     ext6.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
-    ext6.dmovey( -4.25-0.35).dmovex(0.15)
+    ext6.dmovey(0).dmovex(0.15)
 
-    ext4.dmovey(-0.1)
-    ext2.dmovey(-0.15)
 
     #############   Vertical supports    ################
     cnt1_x = s1_ref.ports["o2"].center[0]/1000
@@ -278,17 +249,19 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     s9 = c.add_ref(gf.components.straight(length=53, width=7, layer=layer)).dmove((cnt1_x - 15, cnt1_y + 5))
     s10 = c.add_ref(gf.components.circle(radius=14, layer=layer)).dmove((cnt1_x + 15, cnt1_y + 12.2))
 
+    s11 = c.add_ref(s3).drotate(90).dmove((cnt2_x + 4.25, cnt2_y - 3.8))
+    s12 = c.add_ref(s3).drotate(270).dmove((cnt2_x + 4.25, cnt2_y + 3.8))
+
     ###########  Construct waveguides  #############
     top_waveguide = gf.boolean(A=taper, B=s1_ref, operation="or", layer=layer)
     for comp in [s1_mirror_x, sbend_ref, sbend_mirror_x, s2_ref, s2_right_ref, fish,s3_ref,s4_ref,s5_ref,s6_ref,s7,s8,s9,ext1,ext2,ext3,ext4,ext5,
-                 ext6,s10,s7t,s8t,spring_taper,ext1t1,ext1t2,spring_taper_end,
-                 spring_vertical1,spring_vertical2,spring_vertical3,spring_vertical4,spring_vertical5,spring_vertical6,spring_vertical7,spring_vertical8]:
+                 ext6,s10,s7t,s8t,ext1t1,ext1t2,s11,s12]:
         top_waveguide = gf.boolean(A=top_waveguide, B=comp, operation="or", layer=layer)
 
     bot_waveguide = gf.Component().add_ref(top_waveguide).mirror_y().dmovey(dy*0)
     dc = gf.boolean(A=top_waveguide, B=bot_waveguide, operation="or", layer=layer)
 
-    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 37.05, width=dy*2+16, layer=layer)).dmovex(-22)
+    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 37.05, width=dy*2+6.8, layer=layer)).dmovex(-22)
     dc_positive = gf.boolean(A=A, B=dc, operation="A-B", layer=layer)
 
     return dc_positive
@@ -935,8 +908,9 @@ def unite_array( component, rows=1, cols=1, spacing=(10, 10), name=None, layer=(
     if name:
         merged_device.name = name
 
-    merged_device.add_port(name="o1", center=(0, 0), width=0.5, orientation=180, layer=layer)
-    merged_device.add_port(name="o2", center=(merged_device.size_info.width, 0), width=0.5, orientation=0, layer=layer)
+    y_center = merged_device.size_info.center[1]
+    merged_device.add_port(name="o1", center=(0, y_center), width=0.5, orientation=180, layer=layer)
+    merged_device.add_port(name="o2", center=(merged_device.size_info.width, y_center), width=0.5, orientation=0, layer=layer)
 
     return merged_device
 
@@ -1612,13 +1586,13 @@ def main():
     c.write_gds(gds_output_file)
     print(f"GDS saved to {gds_output_file}")
 
-    # Extract Layer (1,0) and Save as DXF
-    layer_1_0 = c.extract(layers=[(1, 0)])
-    dxf_output_file = os.path.join(base_directory, f"MDMA-{today_date}.dxf")
-
-    # Save the extracted layer as DXF
-    layer_1_0.write(dxf_output_file)
-    print(f"DXF saved to {dxf_output_file}")
+    # # Extract Layer (1,0) and Save as DXF
+    # layer_1_0 = c.extract(layers=[(1, 0)])
+    # dxf_output_file = os.path.join(base_directory, f"MDMA-{today_date}.dxf")
+    #
+    # # Save the extracted layer as DXF
+    # layer_1_0.write(dxf_output_file)
+    # print(f"DXF saved to {dxf_output_file}")
 
     c.show()
 
