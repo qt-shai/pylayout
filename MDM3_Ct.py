@@ -159,8 +159,8 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     layer = (1, 0)
 
     # Load fish component
-    # fish_component = gf.import_gds(Path('QT14.gds' if resonator == 'fish' else 'QT10.gds'))
-    fish_component = gf.import_gds(Path('QT14s.gds' if resonator == 'fish' else 'QT10.gds')) # SIMULATION
+    fish_component = gf.import_gds(Path('QT14.gds' if resonator == 'fish' else 'QT10.gds'))
+    # fish_component = gf.import_gds(Path('QT14s.gds' if resonator == 'fish' else 'QT10.gds')) # SIMULATION
     fish_component.add_port(name="o1", center=(0, 0), width=0.5, orientation=180, layer=layer)
     fish_component.add_port(name="o2", center=(fish_component.size_info.width-0.1, 0), width=0.5, orientation=0, layer=layer)
 
@@ -197,8 +197,8 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ext1 = c.add_ref(gf.components.straight(length=1,width=0.3,layer=layer))
     ext1.connect(port="o1", other=fish.ports["o2"], allow_width_mismatch=True)
 
-    ext1t1 = c.add_ref(gf.components.straight(length=1.5,width=0.3,layer=layer))
-    ext1t2 = c.add_ref(gf.components.straight(length=1.5, width=0.3, layer=layer))
+    ext1t1 = c.add_ref(gf.components.straight(length=1.5,width=0.35,layer=layer))
+    ext1t2 = c.add_ref(gf.components.straight(length=1.5, width=0.35, layer=layer))
 
     ext1t1.drotate(angle=30)
     ext1t1.dmove((ext1.ports["o1"].x/1000, ext1.ports["o1"].y/1000+0.23))
@@ -220,6 +220,42 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ext6 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=10, cols=1, spacing=(3, 0.7)))
     ext6.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
     ext6.dmovey(0).dmovex(0.15)
+
+
+
+
+    spx = gf.CrossSection(sections=[gf.Section(width=0.2,layer=layer, port_names=("in", "out"))], radius_min=0.15)
+    sp1 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=-90, radius=1.5)).drotate(90)
+    sp1.move((ext2.ports["o2"].x / 1000 + 0.25, ext2.ports["o2"].y / 1000 + 3.2))
+
+    spt = c.add_ref(gf.components.taper(length=.5, width1=1, width2=0.2, layer=layer))
+    spt.connect(port="o2", other=sp1.ports["in"])
+
+    sp2 = c.add_ref(gf.components.straight(cross_section=spx, length=4.9))
+    sp2.connect(port="in", other=sp1.ports["out"], allow_width_mismatch=True)
+    sp3 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=-180, radius=0.3, npoints=12))
+    sp3.connect(port="in", other=sp2.ports["out"], allow_width_mismatch=True)
+    sp4 = c.add_ref(gf.components.straight(cross_section=spx, length=5))
+    sp4.connect(port="in", other=sp3.ports["out"], allow_width_mismatch=True)
+    sp5 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=180, radius=0.3, npoints=12))
+    sp5.connect(port="in", other=sp4.ports["out"], allow_width_mismatch=True)
+    sp6 = c.add_ref(gf.components.straight(cross_section=spx,  length=5))
+    sp6.connect(port="in", other=sp5.ports["out"], allow_width_mismatch=True)
+
+    sp7 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=180, radius=.8, npoints=12))
+    sp7.connect(port="in", other=sp6.ports["out"], allow_width_mismatch=True)
+    sp8 = c.add_ref(gf.components.straight(length=5.8, cross_section=spx))
+    sp8.connect(port="in", other=sp7.ports["out"], allow_width_mismatch=True)
+
+    sp9 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=-90, radius=.8, npoints=12))
+    sp9.connect(port="in", other=sp8.ports["out"], allow_width_mismatch=True)
+
+    sp10 = c.add_ref(gf.components.straight(length=1, cross_section=spx))
+    sp10.connect(port="in", other=sp9.ports["out"], allow_width_mismatch=True)
+
+    spt_end = c.add_ref(gf.components.taper(length=0.5, width1=0.2, width2=1, layer=layer))
+    spt_end.connect(port="o1", other=sp10.ports["out"], allow_width_mismatch=True)
+
 
 
     #############   Vertical supports    ################
@@ -255,13 +291,13 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ###########  Construct waveguides  #############
     top_waveguide = gf.boolean(A=taper, B=s1_ref, operation="or", layer=layer)
     for comp in [s1_mirror_x, sbend_ref, sbend_mirror_x, s2_ref, s2_right_ref, fish,s3_ref,s4_ref,s5_ref,s6_ref,s7,s8,s9,ext1,ext2,ext3,ext4,ext5,
-                 ext6,s10,s7t,s8t,ext1t1,ext1t2,s11,s12]:
+                 ext6,s10,s7t,s8t,ext1t1,ext1t2,s11,s12,sp1,spt,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9,sp10,spt,spt_end]:
         top_waveguide = gf.boolean(A=top_waveguide, B=comp, operation="or", layer=layer)
 
     bot_waveguide = gf.Component().add_ref(top_waveguide).mirror_y().dmovey(dy*0)
     dc = gf.boolean(A=top_waveguide, B=bot_waveguide, operation="or", layer=layer)
 
-    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 37.05, width=dy*2+6.8, layer=layer)).dmovex(-22)
+    A = gf.Component().add_ref(gf.components.straight(length=length * 2 + 37.05, width=dy*2+14.7, layer=layer)).dmovex(-22)
     dc_positive = gf.boolean(A=A, B=dc, operation="A-B", layer=layer)
 
     return dc_positive
@@ -1565,9 +1601,9 @@ def main():
     # c.add_ref(gf.components.straight(length=50,width=250)).dmovey(62-8).dmovex(-70+overlap1)
 
     a=gf.Component().add_ref(gf.components.straight(length=50,width=120,layer=(2,0))).dmovex(44.4)
-    b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(25)
+    b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(24)
     a=gf.boolean(A=a,B=b,operation="A-B",layer=(2,0))
-    b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(-25)
+    b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(-24)
     a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
     b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(30)
     a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
