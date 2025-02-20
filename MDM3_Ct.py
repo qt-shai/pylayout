@@ -208,30 +208,50 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ext2 = c.add_ref(gf.components.straight(length=0.6, width=5.8, layer=layer))
     ext2.connect(port="o1", other=ext1.ports["o2"], allow_width_mismatch=True)
 
-    ext3 = c.add_ref(unite_array(gf.components.straight(length=.5, width=0.5, layer=layer), rows=3, cols=1, spacing=(3, 2.2)))
+    ext3 = c.add_ref(unite_array(gf.components.straight(length=.5, width=0.8, layer=layer), rows=3, cols=1, spacing=(3, 2.5)))
     ext3.connect(port="o1", other=ext2.ports["o2"], allow_width_mismatch=True)
 
     ext4 = c.add_ref(gf.components.straight(length=0.6, width=5.8, layer=layer))
     ext4.connect(port="o1", other=ext3.ports["o2"], allow_width_mismatch=True)
 
-    ext5 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=9, cols=1, spacing=(3, 0.7)))
+    ext5 = c.add_ref(gf.components.straight(length=6.8, width=0.8, layer=layer))
     ext5.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
+    ext5.dmovey(-2.5)
 
-    ext6 = c.add_ref(unite_array(gf.components.straight(length=7, width=0.2, layer=layer), rows=10, cols=1, spacing=(3, 0.7)))
+    ext6 = c.add_ref(gf.components.straight(length=7, width=0.8, layer=layer))
     ext6.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
-    ext6.dmovey(0).dmovex(0.15)
+    ext6.dmovey(3.05).dmovex(0.15)
 
+    ext7 = c.add_ref(gf.components.taper(length=1, width1=0.2,width2=1.5, layer=layer))   # STOP
+    ext7.connect(port="o1", other=ext4.ports["o2"], allow_width_mismatch=True)
+    ext7.dmovey(-3.15).dmovex(6.9)
 
+    ext8 = c.add_ref(gf.components.straight(length=0.4, width=0.2, layer=layer))  # STOP
+    ext8.connect(port="o1", other=ext7.ports["o1"], allow_width_mismatch=True)
 
+    # # # # # # # # # # # Teeth # # # # # # # # # # #
+    x_spacing=0.87
+    too1 = c.add_ref(unite_array(gf.components.straight(length=0.2, width=5, layer=layer), rows=1, cols=10, spacing=(x_spacing, 0)))
+    too1.move((ext5.ports["o2"].x / 1000 -6.3-0.7, ext5.ports["o2"].y / 1000+2.5))
+
+    too2 = c.add_ref(unite_array(gf.components.straight(length=0.2, width=5, layer=layer), rows=1, cols=10, spacing=(x_spacing, 0)))
+    too2.move((ext5.ports["o2"].x / 1000 - 6.65, ext5.ports["o2"].y / 1000 + 3.05))
+
+    fil1=c.add_ref(unite_array(create_fillet(),rows=1,cols=8,spacing=(x_spacing, 0)))
+    fil1.move((ext5.ports["o2"].x / 1000 -6.8, ext5.ports["o2"].y / 1000+0.4))
+    fil2 = c.add_ref(unite_array(create_fillet(), rows=1, cols=8, spacing=(x_spacing, 0))).mirror_x()
+    fil2.move((ext5.ports["o2"].x / 1000+0.83-x_spacing, ext5.ports["o2"].y / 1000 + 0.4))
+
+    # # # # # # # # # # # # # SPRING # # # # # ## #  # # # # # # ##
 
     spx = gf.CrossSection(sections=[gf.Section(width=0.2,layer=layer, port_names=("in", "out"))], radius_min=0.15)
     sp1 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=-90, radius=1.5)).drotate(90)
-    sp1.move((ext2.ports["o2"].x / 1000 + 0.25, ext2.ports["o2"].y / 1000 + 3.2))
+    sp1.move((ext2.ports["o2"].x / 1000 + 0.25, ext2.ports["o2"].y / 1000 + 3.5))
 
-    spt = c.add_ref(gf.components.taper(length=.5, width1=1, width2=0.2, layer=layer))
+    spt = c.add_ref(gf.components.taper(length=.8, width1=1, width2=0.2, layer=layer))
     spt.connect(port="o2", other=sp1.ports["in"])
 
-    sp2 = c.add_ref(gf.components.straight(cross_section=spx, length=4.9))
+    sp2 = c.add_ref(gf.components.straight(cross_section=spx, length=4.7))
     sp2.connect(port="in", other=sp1.ports["out"], allow_width_mismatch=True)
     sp3 = c.add_ref(gf.components.bend_euler(cross_section=spx, angle=-180, radius=0.3, npoints=12))
     sp3.connect(port="in", other=sp2.ports["out"], allow_width_mismatch=True)
@@ -279,9 +299,9 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     s6_ref.dmove((cnt2_x, cnt2_y+s3_l+6.25))
 
     s7 = c.add_ref(gf.components.straight(length=14, width=3, layer=layer)).dmove((cnt2_x - 6, cnt2_y - 3))
-    s7t = c.add_ref(gf.components.taper(length=4, width1=0.2, width2=3.3, layer=layer)).dmove((cnt2_x - 10, cnt2_y - 3.2))
+    s7t = c.add_ref(gf.components.taper(length=4, width1=0.2, width2=3.1, layer=layer)).dmove((cnt2_x - 10, cnt2_y - 3.2))
     s8 = c.add_ref(gf.components.straight(length=21, width=3, layer=layer)).dmove((cnt1_x - 15, cnt1_y - 3))
-    s8t = c.add_ref(gf.components.taper(length=4, width1=3.3, width2=0.2, layer=layer)).dmove((cnt1_x + 6, cnt2_y - 3.2))
+    s8t = c.add_ref(gf.components.taper(length=4, width1=3.1, width2=0.2, layer=layer)).dmove((cnt1_x + 6, cnt2_y - 3.2))
     s9 = c.add_ref(gf.components.straight(length=53, width=7, layer=layer)).dmove((cnt1_x - 15, cnt1_y + 5))
     s10 = c.add_ref(gf.components.circle(radius=14, layer=layer)).dmove((cnt1_x + 15, cnt1_y + 12.2))
 
@@ -291,7 +311,8 @@ def create_dc_design(resonator="fish",width_resonator=0.54):
     ###########  Construct waveguides  #############
     top_waveguide = gf.boolean(A=taper, B=s1_ref, operation="or", layer=layer)
     for comp in [s1_mirror_x, sbend_ref, sbend_mirror_x, s2_ref, s2_right_ref, fish,s3_ref,s4_ref,s5_ref,s6_ref,s7,s8,s9,ext1,ext2,ext3,ext4,ext5,
-                 ext6,s10,s7t,s8t,ext1t1,ext1t2,s11,s12,sp1,spt,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9,sp10,spt,spt_end]:
+                 ext6,too1,too2,ext7,ext8,fil1,fil2,
+                 s10,s7t,s8t,ext1t1,ext1t2,s11,s12,sp1,spt,sp2,sp3,sp4,sp5,sp6,sp7,sp8,sp9,sp10,spt,spt_end]:
         top_waveguide = gf.boolean(A=top_waveguide, B=comp, operation="or", layer=layer)
 
     bot_waveguide = gf.Component().add_ref(top_waveguide).mirror_y().dmovey(dy*0)
@@ -1594,7 +1615,29 @@ def merge_layer(component, layer=(1, 0)):
     return merged_component
 
 
-def main(): 
+
+
+
+def create_fillet(radius = 0.15):
+    c = gf.Component()
+
+    # Create a square of size 0.15x0.15
+    square = gf.components.rectangle(size=(radius, radius), layer=(1, 0))
+
+    # Create a circle with radius 0.15 at the top-right corner of the square
+    circle = gf.components.circle(radius=radius, layer=(1, 0))
+    circle_ref = c.add_ref(circle)
+    circle_ref.move((radius, radius))  # Move circle center to the top-right corner
+
+    # Subtract the circle from the square
+    result = gf.boolean(A=square, B=circle_ref, operation="A-B", layer=(1, 0))
+
+    return result
+
+
+
+
+def main():
     c = merge_layer(create_design(clearance_width=20), layer=(1, 0))
 
     # overlap1=0.5
@@ -1618,7 +1661,7 @@ def main():
     # base_directory = r"C:\PyLayout\PyLayout"
 
     # Save GDS file
-    gds_output_file = os.path.join(base_directory, f"MDMA-{today_date}.gds")
+    gds_output_file = os.path.join(base_directory, f"MDMC-{today_date}.gds")
     c.write_gds(gds_output_file)
     print(f"GDS saved to {gds_output_file}")
 
