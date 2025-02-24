@@ -185,7 +185,7 @@ def create_spring(c, cross_section, start_pos):
     taper_start_ref.move(start_pos)
     refs.append(taper_start_ref)
 
-    straight0 = gf.components.straight(cross_section=cross_section, length=3.1)
+    straight0 = gf.components.straight(cross_section=cross_section, length=2.5)
     straight0_ref = c.add_ref(straight0)
     straight0_ref.connect(port="in", other=taper_start_ref.ports["o2"], allow_width_mismatch=True)
     refs.append(straight0_ref)
@@ -440,7 +440,7 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     ext1t2.dmove((ext1.ports["o1"].x / 1000 - 0.15, ext1.ports["o1"].y / 1000 - 0.23))
     refs.append(ext1t2)
 
-    comb_base = c.add_ref(gf.components.straight(length=0.8, width=4, layer=layer_main))
+    comb_base = c.add_ref(gf.components.straight(length=0.8, width=5.5, layer=layer_main))
     comb_base.connect(port="o1", other=ext1.ports["o2"], allow_width_mismatch=True)
     refs.append(comb_base)
 
@@ -463,12 +463,11 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     opposing_comb_spine_down.dmovey(-3.1).dmovex(0.15)
     refs.append(opposing_comb_spine_down)
 
-    opposing_comb_spine_down_ext = c.add_ref(gf.components.straight(length=1, width=1, layer=layer_main))
+    opposing_comb_spine_down_ext = c.add_ref(gf.components.straight(length=1.2, width=.4, layer=layer_main))
     opposing_comb_spine_down_ext.connect(port="o2", other=opposing_comb_spine_down.ports["o1"], allow_width_mismatch=True)
-    opposing_comb_spine_down_ext.dmovey(0)
     refs.append(opposing_comb_spine_down_ext)
 
-    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=1.02, width1=3.2,width2=1, layer=layer_main))
+    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=.82, width1=3.2,width2=0.4, layer=layer_main))
     opposing_comb_spine_down_taper.connect(port="o2", other=opposing_comb_spine_down_ext.ports["o1"], allow_width_mismatch=True)
     refs.append(opposing_comb_spine_down_taper)
 
@@ -519,7 +518,7 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     spring_refs = create_spring(
         c=c,
         cross_section=spring_cs,
-        start_pos=(comb_base.ports["o2"].x / 1000 -0.4, comb_base.ports["o2"].y / 1000 + 1.7)
+        start_pos=(comb_base.ports["o2"].x / 1000 -0.4, comb_base.ports["o2"].y / 1000 + 2.3)
     )
     refs.append(spring_refs)
 
@@ -545,14 +544,9 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
 
     top_waveguide = merge_references(top_waveguide, refs, layer_main)
 
-    # Additional references
-    # s7 = c.add_ref(gf.components.straight(length=14, width=3, layer=layer_main)) # Already created in create_vertical_supports?
-    # ... You can remove duplicates if they are created inside create_vertical_supports
-    # For demonstration, we'll put them here if needed.
-
     # Merge all references
 
-    # Create mirrored waveguide (bot_waveguide) if needed
+    # Create mirrored waveguide (bot_waveguide)
     bot_waveguide_ref = gf.Component().add_ref(top_waveguide).mirror_y()
     # Shift if necessary: .dmovey(dy*0) does nothing, but keep it for clarity:
     bot_waveguide_ref.dmovey(dy * 0)
