@@ -179,13 +179,16 @@ def create_spring(c, cross_section, start_pos):
     Returns a list of references for subsequent boolean merges.
     """
     refs = []
+    horizontal_l=4.4
+    vertical_l=3.8
+
     # Taper that starts the spring
-    taper_start = gf.components.taper(length=0.6, width1=0.8, width2=0.2, layer=cross_section.layer)
+    taper_start = gf.components.taper(length=0.15, width1=0.5, width2=0.15, layer=cross_section.layer)
     taper_start_ref = c.add_ref(taper_start).drotate(90)
     taper_start_ref.move(start_pos)
     refs.append(taper_start_ref)
 
-    straight0 = gf.components.straight(cross_section=cross_section, length=2.5)
+    straight0 = gf.components.straight(cross_section=cross_section, length=vertical_l-1.65)
     straight0_ref = c.add_ref(straight0)
     straight0_ref.connect(port="in", other=taper_start_ref.ports["o2"], allow_width_mismatch=True)
     refs.append(straight0_ref)
@@ -196,7 +199,7 @@ def create_spring(c, cross_section, start_pos):
     bend1_ref.connect(port="in", other=straight0_ref.ports["out"], allow_width_mismatch=True)
     refs.append(bend1_ref)
 
-    straight1 = gf.components.straight(cross_section=cross_section, length=1.1)
+    straight1 = gf.components.straight(cross_section=cross_section, length=horizontal_l-1.5)
     straight1_ref = c.add_ref(straight1)
     straight1_ref.connect(port="in", other=bend1_ref.ports["out"], allow_width_mismatch=True)
     refs.append(straight1_ref)
@@ -206,7 +209,7 @@ def create_spring(c, cross_section, start_pos):
     bend2_ref.connect(port="in", other=straight1_ref.ports["out"], allow_width_mismatch=True)
     refs.append(bend2_ref)
 
-    straight2 = gf.components.straight(cross_section=cross_section, length=1)
+    straight2 = gf.components.straight(cross_section=cross_section, length=horizontal_l-1.5)
     straight2_ref = c.add_ref(straight2)
     straight2_ref.connect(port="in", other=bend2_ref.ports["out"], allow_width_mismatch=True)
     refs.append(straight2_ref)
@@ -216,7 +219,7 @@ def create_spring(c, cross_section, start_pos):
     bend3_ref.connect(port="in", other=straight2_ref.ports["out"], allow_width_mismatch=True)
     refs.append(bend3_ref)
 
-    straight3 = gf.components.straight(cross_section=cross_section, length=1.6)
+    straight3 = gf.components.straight(cross_section=cross_section, length=horizontal_l-1)
     straight3_ref = c.add_ref(straight3)
     straight3_ref.connect(port="in", other=bend3_ref.ports["out"], allow_width_mismatch=True)
     refs.append(straight3_ref)
@@ -236,7 +239,7 @@ def create_spring(c, cross_section, start_pos):
     bend5_ref.connect(port="in", other=straight4_ref.ports["out"], allow_width_mismatch=True)
     refs.append(bend5_ref)
 
-    straight5 = gf.components.straight(cross_section=cross_section, length=2.2)
+    straight5 = gf.components.straight(cross_section=cross_section, length=horizontal_l-0.4)
     straight5_ref = c.add_ref(straight5)
     straight5_ref.connect(port="in", other=bend5_ref.ports["out"], allow_width_mismatch=True)
     refs.append(straight5_ref)
@@ -246,14 +249,14 @@ def create_spring(c, cross_section, start_pos):
     bend6_ref.connect(port="in", other=straight5_ref.ports["out"], allow_width_mismatch=True)
     refs.append(bend6_ref)
 
-    taper_end = gf.components.taper(length=0.6, width1=0.2, width2=0.8, layer=cross_section.layer)
+    taper_end = gf.components.taper(length=0.5, width1=0.15, width2=0.8, layer=cross_section.layer)
     taper_end_ref = c.add_ref(taper_end)
     taper_end_ref.connect(port="o1", other=bend6_ref.ports["out"], allow_width_mismatch=True)
     refs.append(taper_end_ref)
 
     return refs
 
-def create_vertical_supports(c, layer, cnt1, cnt2):
+def create_vertical_supports(c, layer, cnt1, cnt2,dy):
     """
     Creates vertical support tapers and shapes around the waveguide ports.
     cnt1, cnt2 are (x, y) positions in mm (since you used /1000).
@@ -287,38 +290,29 @@ def create_vertical_supports(c, layer, cnt1, cnt2):
     refs.append(ts4_ref)
 
     # Horizontal large supports
-    support1 = c.add_ref(gf.components.straight(length=14, width=3, layer=layer))
-    support1.dmove((cnt2[0] - 6, cnt2[1] - 3))
+    support1 = c.add_ref(gf.components.straight(length=8.5, width=dy+3, layer=layer))
+    support1.dmove((cnt2[0] - 5, cnt2[1] - dy))
     refs.append(support1)
 
-    taper_to_support1 = c.add_ref(gf.components.taper(length=4, width1=0.2, width2=3.1, layer=layer))
-    taper_to_support1.dmove((cnt2[0] - 10, cnt2[1] - 3.2))
+    taper_to_support1 = c.add_ref(gf.components.taper(length=4.5, width1=0.5, width2=dy+3, layer=layer))
+    taper_to_support1.connect(port="o2", other=support1.ports["o1"],allow_width_mismatch=True)
     refs.append(taper_to_support1)
 
-    support2 = c.add_ref(gf.components.straight(length=21, width=3, layer=layer))
-    support2.dmove((cnt1[0] - 15, cnt1[1] - 3))
+    support2 = c.add_ref(gf.components.straight(length=21, width=dy+3, layer=layer))
+    support2.dmove((cnt1[0] - 16.5, cnt1[1] -dy))
     refs.append(support2)
 
-    taper_to_support2 = c.add_ref(gf.components.taper(length=4, width1=3.1, width2=0.2, layer=layer))
-    taper_to_support2.dmove((cnt1[0] + 6, cnt2[1] - 3.2))
+    taper_to_support2 = c.add_ref(gf.components.taper(length=4.5, width1=dy+3, width2=0.5, layer=layer))
+    taper_to_support2.connect(port="o1", other=support2.ports["o2"], allow_width_mismatch=True)
     refs.append(taper_to_support2)
 
-    support3 = c.add_ref(gf.components.straight(length=53, width=7, layer=layer))
-    support3.dmove((cnt1[0] - 15, cnt1[1] + 5))
+    support3 = c.add_ref(gf.components.straight(length=34.5+dy*2.5, width=10, layer=layer))
+    support3.dmove((cnt1[0] - 15, cnt1[1] + 6.5))
     refs.append(support3)
 
-    circle_support = c.add_ref(gf.components.circle(radius=14, layer=layer))
-    circle_support.dmove((cnt1[0] + 15, cnt1[1] + 12.2))
+    circle_support = c.add_ref(gf.components.circle(radius=7, layer=layer))
+    circle_support.dmove((cnt1[0] + dy*2+2.8, cnt1[1] + 3.5))
     refs.append(circle_support)
-
-    # Additional small vertical tapers (s11, s12 in original code)
-    vertical_taper_up = c.add_ref(taper_small).drotate(90)
-    vertical_taper_up.dmove((cnt2[0] + 4.25, cnt2[1] - 3.8))
-    refs.append(vertical_taper_up)
-
-    vertical_taper_down = c.add_ref(taper_small).drotate(270)
-    vertical_taper_down.dmove((cnt2[0] + 4.25, cnt2[1] + 3.8))
-    refs.append(vertical_taper_down)
 
     return refs
 
@@ -340,20 +334,25 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
 
     # General parameters
     wg_width = 0.25       # Waveguide width (microns)
-    sbend_length = 12     # S-bend length (microns)
-    dy = 2.9              # Vertical offset (microns)
+    tooth_width = 0.5
+    tooth_length = 5
+    dy = tooth_length+0.8  # Vertical offset (microns)
+    sbend_length = dy*2  # S-bend length (microns)
+    x_spacing = round(3 * tooth_width, 1)
+    N_teeth = 12
+
     layer_main = (1, 0)
     refs=[]
 
     # --- Load fish or alternative resonator geometry ---
-    gds_path = Path("QT14s.gds") if resonator == "fish" else Path("QT10.gds")
+    gds_path = Path("QT14_v1.gds") if resonator == "fish" else Path("QT10.gds")
     fish_component = gf.import_gds(gds_path)
     fish_component.add_port(
         name="o1", center=(0, 0), width=0.5, orientation=180, layer=layer_main
     )
     fish_component.add_port(
         name="o2",
-        center=(fish_component.size_info.width - 0.1, 0),
+        center=(fish_component.size_info.width-0.002, 0),
         width=0.5,
         orientation=0,
         layer=layer_main,
@@ -401,99 +400,67 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     sbend_ref_mirror.connect(port="in", other=sbend_ref.ports["out"])
     refs.append(sbend_ref_mirror)
 
-    taper1_ref_2 = c.add_ref(taper1)
-    taper_right = gf.components.taper(
-        length=taper1_length,
-        width1=taper1_width2,
-        width2=width_resonator,
-        layer=layer_main
-    )
-    taper_right_ref = c.add_ref(taper_right)
-
-    taper1_ref_2.connect(
-        port="o1", other=sbend_ref_mirror.ports["out"], allow_width_mismatch=True
-    )
+    taper1_ref_2 = c.add_ref(gf.components.taper(length=taper1_length, width1=wg_width, width2=width_resonator, layer=layer_main))
+    taper1_ref_2.connect(port="o1", other=sbend_ref_mirror.ports["out"], allow_width_mismatch=True)
     refs.append(taper1_ref_2)
-    taper_right_ref.connect(
-        port="o1", other=taper1_ref_2.ports["o2"], allow_width_mismatch=True
-    )
-    refs.append(taper_right_ref)
 
     # --- Attach fish component ---
     fish_ref = c.add_ref(fish_component)
-    fish_ref.connect(port="o1", other=taper_right_ref.ports["o2"], allow_width_mismatch=True)
+    fish_ref.connect(port="o1", other=taper1_ref_2.ports["o2"], allow_width_mismatch=True)
     refs.append(fish_ref)
 
-    # --- Extensions (straight/taper sections) ---
-    ext1 = c.add_ref(gf.components.straight(length=1, width=0.4, layer=layer_main))
-    ext1.connect(port="o1", other=fish_ref.ports["o2"], allow_width_mismatch=True)
-    ext1.dmovex(-0.15)
-    refs.append(ext1)
-
-    ext1t1 = c.add_ref(gf.components.straight(length=1.6, width=0.4, layer=layer_main))
-    ext1t1.drotate(angle=20)
-    ext1t1.dmove((ext1.ports["o1"].x/1000 - 0.15, ext1.ports["o1"].y/1000 + 0.23))
-    refs.append(ext1t1)
-
-    ext1t2 = c.add_ref(gf.components.straight(length=1.7, width=0.4, layer=layer_main))
-    ext1t2.drotate(angle=-20)
-    ext1t2.dmove((ext1.ports["o1"].x / 1000 - 0.15, ext1.ports["o1"].y / 1000 - 0.23))
-    refs.append(ext1t2)
-
-    comb_base = c.add_ref(gf.components.straight(length=0.8, width=5.5, layer=layer_main))
-    comb_base.connect(port="o1", other=ext1.ports["o2"], allow_width_mismatch=True)
+    comb_base = c.add_ref(gf.components.straight(length=tooth_width, width=tooth_length*2+0.8, layer=layer_main))
+    comb_base.connect(port="o1", other=fish_ref.ports["o2"], allow_width_mismatch=True)
     refs.append(comb_base)
 
-    comb_spine = c.add_ref(gf.components.straight(length=6, width=0.8, layer=layer_main))
+    comb_spine = c.add_ref(gf.components.straight(length=N_teeth*x_spacing, width=0.8, layer=layer_main))
     comb_spine.connect(port="o1", other=comb_base.ports["o2"], allow_width_mismatch=True)
     refs.append(comb_spine)
 
-    opposing_comb_spine_up = c.add_ref(gf.components.straight(length=7, width=1.7, layer=layer_main))
+    opposing_comb_spine_up = c.add_ref(gf.components.straight(length=N_teeth*x_spacing+1, width=1.3, layer=layer_main))
     opposing_comb_spine_up.connect(port="o1", other=comb_base.ports["o2"], allow_width_mismatch=True)
-    opposing_comb_spine_up.dmovey(3.75).dmovex(0.15)
+    opposing_comb_spine_up.dmovey(tooth_length+1.25).dmovex(0.15)
     refs.append(opposing_comb_spine_up)
 
-    opposing_comb_spine_up_ancor = c.add_ref(gf.components.straight(length=4, width=5, layer=layer_main))
+    opposing_comb_spine_up_ancor = c.add_ref(gf.components.straight(length=15, width=5, layer=layer_main))
     opposing_comb_spine_up_ancor.connect(port="o1", other=comb_base.ports["o2"], allow_width_mismatch=True)
-    opposing_comb_spine_up_ancor.dmovex(2.7).dmovey(6)
+    opposing_comb_spine_up_ancor.dmovex(5).dmovey(9)
     refs.append(opposing_comb_spine_up_ancor)
 
-    opposing_comb_spine_down = c.add_ref(gf.components.straight(length=7, width=0.4, layer=layer_main))
+    opposing_comb_spine_down = c.add_ref(gf.components.straight(length=N_teeth*x_spacing+1, width=0.5, layer=layer_main))
     opposing_comb_spine_down.connect(port="o1", other=comb_base.ports["o2"], allow_width_mismatch=True)
-    opposing_comb_spine_down.dmovey(-3.1).dmovex(0.15)
+    opposing_comb_spine_down.dmovey(-dy).dmovex(0.15)
     refs.append(opposing_comb_spine_down)
 
-    opposing_comb_spine_down_ext = c.add_ref(gf.components.straight(length=1.2, width=.4, layer=layer_main))
+    opposing_comb_spine_down_ext = c.add_ref(gf.components.straight(length=1.2, width=.5, layer=layer_main))
     opposing_comb_spine_down_ext.connect(port="o2", other=opposing_comb_spine_down.ports["o1"], allow_width_mismatch=True)
     refs.append(opposing_comb_spine_down_ext)
 
-    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=.82, width1=3.2,width2=0.4, layer=layer_main))
+    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=.82, width1=dy+3,width2=0.5, layer=layer_main))
     opposing_comb_spine_down_taper.connect(port="o2", other=opposing_comb_spine_down_ext.ports["o1"], allow_width_mismatch=True)
     refs.append(opposing_comb_spine_down_taper)
 
     # --- "Teeth" arrays ---
-    tooth_width=0.5
-    x_spacing = round(3.0*tooth_width,1)
-    N_teeth = 5
+
     teeth_array_1 = c.add_ref(
         unite_array(
-            gf.components.straight(length=tooth_width, width=2.5, layer=layer_main),
-            rows=2, cols=N_teeth, spacing=(x_spacing, 3)
+            gf.components.straight(length=tooth_width, width=tooth_length, layer=layer_main),
+            rows=2, cols=N_teeth, spacing=(x_spacing, tooth_length+0.8)
         )
     )
-    teeth_array_1.move((comb_base.ports["o2"].x / 1000-tooth_width+x_spacing, comb_base.ports["o2"].y / 1000-1.5))
+    teeth_array_1.move((comb_base.ports["o2"].x / 1000-tooth_width+x_spacing, comb_base.ports["o2"].y / 1000-tooth_length/2-.4))
     refs.append(teeth_array_1)
 
     teeth_array_2 = c.add_ref(
         unite_array(
-            gf.components.straight(length=tooth_width, width=2.5, layer=layer_main),
-            rows=2, cols=N_teeth, spacing=(x_spacing, 3.6)
+            gf.components.straight(length=tooth_width, width=tooth_length+0.1, layer=layer_main),
+            rows=2, cols=N_teeth, spacing=(x_spacing, tooth_length+1.2)
         )
     )
-    teeth_array_2.move((comb_base.ports["o2"].x / 1000+0.15, comb_base.ports["o2"].y / 1000 -1.8))
+    teeth_array_2.move((comb_base.ports["o2"].x / 1000+0.15, comb_base.ports["o2"].y / 1000-3.1))
     refs.append(teeth_array_2)
 
-    fillet_array =  unite_array(create_fillet(), rows=1, cols=N_teeth-1, spacing=(x_spacing, 0))
+    fillet_array =  unite_array(create_fillet(), rows=1, cols=N_teeth, spacing=(x_spacing, 0))
     fillet_array_left_top = c.add_ref(fillet_array)
     fillet_array_left_top.move((comb_base.ports["o2"].x / 1000 , comb_spine.ports["o2"].y / 1000 + 0.4))
     refs.append(fillet_array_left_top)
@@ -502,15 +469,15 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     refs.append(fillet_array_left_bot)
 
     fillet_array_right_top = c.add_ref(fillet_array).mirror_x()
-    fillet_array_right_top.move((comb_base.ports["o2"].x / 1000  + x_spacing*(N_teeth-1)-tooth_width, comb_spine.ports["o2"].y / 1000 + 0.4))
+    fillet_array_right_top.move((comb_base.ports["o2"].x / 1000  + x_spacing*(N_teeth)-tooth_width, comb_spine.ports["o2"].y / 1000 + 0.4))
     refs.append(fillet_array_right_top)
     fillet_array_right_bot = c.add_ref(fillet_array).mirror_x().mirror_y()
-    fillet_array_right_bot.move((comb_base.ports["o2"].x / 1000  + x_spacing+(N_teeth-1), comb_spine.ports["o2"].y / 1000 - 0.4))
+    fillet_array_right_bot.move((comb_base.ports["o2"].x / 1000  + x_spacing*(N_teeth)-tooth_width, comb_spine.ports["o2"].y / 1000 - 0.4))
     refs.append(fillet_array_right_bot)
 
     # --- SPRING cross-section + geometry ---
     spring_cs = gf.CrossSection(
-        sections=[gf.Section(width=0.2, layer=layer_main, port_names=("in", "out"))],
+        sections=[gf.Section(width=0.15, layer=layer_main, port_names=("in", "out"))],
         radius_min=0.15
     )
 
@@ -518,22 +485,17 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
     spring_refs = create_spring(
         c=c,
         cross_section=spring_cs,
-        start_pos=(comb_base.ports["o2"].x / 1000 -0.4, comb_base.ports["o2"].y / 1000 + 2.3)
+        start_pos=(comb_base.ports["o2"].x / 1000 -0.25, comb_base.ports["o2"].y / 1000 + tooth_length+0.3)
     )
     refs.append(spring_refs)
 
     # --- Vertical supports ---
     cnt1_x = taper1_ref.ports["o2"].center[0] / 1000
     cnt1_y = taper1_ref.ports["o2"].center[1] / 1000
-    cnt2_x = taper1_ref_2.ports["o2"].center[0] / 1000
+    cnt2_x = taper1_ref_2.ports["o2"].center[0] / 1000+1.3
     cnt2_y = taper1_ref.ports["o2"].center[1] / 1000
 
-    vertical_supports = create_vertical_supports(
-        c=c,
-        layer=layer_main,
-        cnt1=(cnt1_x, cnt1_y),
-        cnt2=(cnt2_x, cnt2_y)
-    )
+    vertical_supports = create_vertical_supports(c=c,layer=layer_main,cnt1=(cnt1_x, cnt1_y),cnt2=(cnt2_x, cnt2_y),dy=dy)
     refs.append(vertical_supports)
 
 
@@ -556,22 +518,16 @@ def create_dc_design(resonator="fish", width_resonator=0.54):
 
     # --- Subtract combined waveguide from a large rectangle to get final geometry ---
     bounding_rect = gf.components.straight(
-        length=sbend_length * 2 + 35.013,
-        width=dy * 2 + 14.7,
+        length=sbend_length * 2 + N_teeth*x_spacing+25.24-0.009,
+        width=dy * 2.5 + 16,
         layer=layer_main
     )
     bounding_rect_ref = gf.Component().add_ref(bounding_rect)
-    bounding_rect_ref.dmovex(-22)
+    bounding_rect_ref.dmovex(-21.8)
 
     dc_positive = gf.boolean(A=bounding_rect_ref, B=combined_dc, operation="A-B", layer=layer_main)
 
     return dc_positive
-
-
-
-
-
-
 
 
 
@@ -1895,19 +1851,18 @@ def create_fillet(radius = 0.15):
 def main():
     c = merge_layer(create_design(clearance_width=20), layer=(1, 0))
 
-    # overlap1=0.5
-    # c.add_ref(gf.components.straight(length=50,width=250)).dmovey(62-8).dmovex(-70+overlap1)
+    # c.add_ref(gf.components.straight(length=50,width=250)).dmovey(62-8).dmovex(-56.8)
 
-    # a=gf.Component().add_ref(gf.components.straight(length=50,width=120,layer=(2,0))).dmovex(44.4)
-    # b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(24)
-    # a=gf.boolean(A=a,B=b,operation="A-B",layer=(2,0))
-    # b=gf.Component().add_ref(gf.components.straight(length=2, width=30, layer=(2, 0))).dmovex(52).dmovey(-24)
-    # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-    # b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(30)
-    # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-    # b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(-30)
-    # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-    # c.add_ref(a)
+    a=gf.Component().add_ref(gf.components.straight(length=50,width=120,layer=(2,0))).dmovex(40.7)
+    b=gf.Component().add_ref(gf.components.straight(length=50, width=30, layer=(2, 0))).dmovex(46).dmovey(29)
+    a=gf.boolean(A=a,B=b,operation="A-B",layer=(2,0))
+    b=gf.Component().add_ref(gf.components.straight(length=50, width=30, layer=(2, 0))).dmovex(46).dmovey(-29)
+    a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
+    b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(30)
+    a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
+    b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(-30)
+    a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
+    c.add_ref(a)
 
 
     today_date = datetime.now().strftime("%d-%m-%y")
@@ -1919,14 +1874,6 @@ def main():
     # gds_output_file = os.path.join(base_directory, f"MDMC-{today_date}.gds")
     # c.write_gds(gds_output_file)
     # print(f"GDS saved to {gds_output_file}")
-
-    # # Extract Layer (1,0) and Save as DXF
-    # layer_1_0 = c.extract(layers=[(1, 0)])
-    # dxf_output_file = os.path.join(base_directory, f"MDMA-{today_date}.dxf")
-    #
-    # # Save the extracted layer as DXF
-    # layer_1_0.write(dxf_output_file)
-    # print(f"DXF saved to {dxf_output_file}")
 
     c.show()
 
