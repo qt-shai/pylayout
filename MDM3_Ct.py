@@ -1866,7 +1866,7 @@ def main():
     # c=gf.Component()
     # c.add_ref(create_dc_design(coupler_l=0.42))
 
-    if True:
+    if False:
         c = merge_layer(create_design(clearance_width=clearance_width), layer=(1, 0))
         c.add_ref(gf.components.straight(length=10,width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
         c.add_ref(gf.components.straight(length=10, width=50)).dmovey(191).dmovex(-clearance_width).flatten()
@@ -1922,19 +1922,19 @@ def main():
             if horizontal:
                 device = label_component.add_ref(gf.components.straight(length=310, width=250, layer=(2, 0)))
                 text.move((position[0] + i * spacing, position[1])).flatten()  # Move horizontally
-                device.move((position[0] + i * spacing - 100, position[1] + (240 if add_or_sub else -170))).flatten()  # Move horizontally
+                device.move((position[0] + i * spacing - 80, position[1] + (300 if add_or_sub else -210))).flatten()  # Move horizontally
             else:
                 device = label_component.add_ref(gf.components.straight(length=250, width=310, layer=(2, 0)))
                 text.move((position[0], position[1] - i * spacing)).flatten()  # Move vertically
-                device.move((position[0] + (250 if add_or_sub else -270), position[1] - i * spacing + 50)).flatten()  # Move vertically
+                device.move((position[0] + (300 if add_or_sub else -330), position[1] - i * spacing + 50)).flatten()  # Move vertically
         return label_component
 
     # Define positions for Left, Right, Top, Bottom
     positions = {
-        "Left": (680, 2050, False, False),  # Vertical
-        "Right": (2095, 2050, False, True),  # Vertical
-        "Top": (800, 2230, True, True),  # Horizontal
-        "Bottom": (810, 700, True, False),  # Horizontal
+        "Left": (750, 2050, False, False),  # Vertical
+        "Right": (2000, 2050, False, True),  # Vertical
+        "Top": (800, 2150, True, True),  # Horizontal
+        "Bottom": (810, 750, True, False),  # Horizontal
     }
 
     # Function to create and save different versions
@@ -1949,7 +1949,7 @@ def main():
         for _, (x, y, is_horizontal, add_or_sub) in positions.items():
             label_component.add_ref(
                 create_labels_component(
-                    labels, chip_name, size=80, spacing=310, position=(x, y), horizontal=is_horizontal,
+                    labels, chip_name, size=70, spacing=310, position=(x, y), horizontal=is_horizontal,
                     add_or_sub=add_or_sub, include_ti=include_ti
                 )
             ).flatten()
