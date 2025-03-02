@@ -1866,7 +1866,7 @@ def main():
     # c=gf.Component()
     # c.add_ref(create_dc_design(coupler_l=0.42))
 
-    if False:
+    if True:
         c = merge_layer(create_design(clearance_width=clearance_width), layer=(1, 0))
         c.add_ref(gf.components.straight(length=10,width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
         c.add_ref(gf.components.straight(length=10, width=50)).dmovey(191).dmovex(-clearance_width).flatten()
