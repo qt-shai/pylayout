@@ -6,6 +6,9 @@ from pathlib import Path
 from datetime import datetime
 import os
 
+from kfactory.kf_types import layer
+
+
 # # ------------------------------------------
 # # KLayout Macro: Save Layout as High-Res PNG
 # # ------------------------------------------
@@ -1856,57 +1859,37 @@ def create_fillet(radius = 0.15):
     return result
 
 
+def run_coupon_mode(base_directory, today_date, clearance_width):
+    # Coupon mode: create coupon design (without electrodes).
+    c = merge_layer(create_design(clearance_width=clearance_width), layer=(1, 0))
+    c.add_ref(gf.components.straight(length=10, width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
+    c.add_ref(gf.components.straight(length=10, width=50)).dmovey(191).dmovex(-clearance_width).flatten()
+
+    # Save GDS file
+    gds_output_file = os.path.join(base_directory, f"Left MDM-{today_date}.gds")
+    c.write_gds(gds_output_file)
+    print(f"GDS saved to {gds_output_file}")
+    c.show()
+
+    # Create rotated versions and save them
+    def save_rotated(original, angle, name):
+        rotated = gf.Component(name=f"rotated_{name}")
+        ref = rotated.add_ref(original)
+        ref.rotate(angle)
+        gds_file = os.path.join(base_directory, f"{name} MDM-{today_date}.gds")
+        rotated.write_gds(gds_file)
+        print(f"GDS saved to {gds_file}")
+        rotated.show()
+
+    save_rotated(c, 90, "Bottom")
+    save_rotated(c, 180, "Right")
+    save_rotated(c, 270, "Top")
 
 
-def main():
-    clearance_width = 50
-    today_date = datetime.now().strftime("%d-%m-%y")
-    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
-
-    # c=gf.Component()
-    # c.add_ref(create_dc_design(coupler_l=0.42))
-
-    if True:
-        c = merge_layer(create_design(clearance_width=clearance_width), layer=(1, 0))
-        c.add_ref(gf.components.straight(length=10,width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
-        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(191).dmovex(-clearance_width).flatten()
-
-        # a=gf.Component().add_ref(gf.components.straight(length=50,width=120,layer=(2,0))).dmovex(40.7)
-        # b=gf.Component().add_ref(gf.components.straight(length=50, width=30, layer=(2, 0))).dmovex(46).dmovey(29)
-        # a=gf.boolean(A=a,B=b,operation="A-B",layer=(2,0))
-        # b=gf.Component().add_ref(gf.components.straight(length=50, width=30, layer=(2, 0))).dmovex(46).dmovey(-29)
-        # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-        # b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(30)
-        # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-        # b=gf.Component().add_ref(gf.components.straight(length=50, width=20, layer=(2, 0))).dmovex(52).dmovey(-30)
-        # a = gf.boolean(A=a, B=b, operation="A-B", layer=(2, 0))
-        # c.add_ref(a)
-
-        # Save GDS file
-        gds_output_file = os.path.join(base_directory, f"Left MDM-{today_date}.gds")
-        c.write_gds(gds_output_file)
-        print(f"GDS saved to {gds_output_file}")
-        c.show()
-
-        # Create rotated versions and save them
-        def save_rotated(original, angle, name):
-            rotated = gf.Component()
-            ref = rotated.add_ref(original)
-            ref.rotate(angle)
-            gds_file = os.path.join(base_directory, f"{name} MDM-{today_date}.gds")
-            rotated.write_gds(gds_file)
-            print(f"GDS saved to {gds_file}")
-            rotated.show()
-
-        save_rotated(c, 90, "Bottom")
-        save_rotated(c, 180, "Right")
-        save_rotated(c, 270, "Top")
-
-
-    # Labels to create
+def run_labels_mode(base_directory, today_date):
+    # Die labels mode: create and save the full die labels.
     labels = ["300", "290", "280", "270", "260"]
 
-    # Function to create text labels component
     def create_labels_component(labels, chip_name, size, spacing, position, horizontal=False, add_or_sub=True, include_ti=True):
         label_component = gf.Component()
         label_component.add_ref(gf.components.text(text=chip_name, size=130, layer=(1, 0))).move((1020, 1700)).flatten()
@@ -1918,34 +1901,41 @@ def main():
 
         for i, label in enumerate(labels):
             text = label_component.add_ref(gf.components.text(text=str(label), size=size, layer=(1, 0)))
-
             if horizontal:
                 device = label_component.add_ref(gf.components.straight(length=310, width=250, layer=(2, 0)))
-                text.move((position[0] + i * spacing, position[1])).flatten()  # Move horizontally
-                device.move((position[0] + i * spacing - 80, position[1] + (300 if add_or_sub else -210))).flatten()  # Move horizontally
+                text.move((position[0] + i * spacing, position[1])).flatten()
+                device.move((position[0] + i * spacing - 80, position[1] + (300 if add_or_sub else -210))).flatten()
+
+                electrode_component = add_electrodes_to_coupon()
+                electrodes_ref = label_component.add_ref(electrode_component).drotate(270 if add_or_sub else 90)
+                # Place electrodes with an offset: 60 to the right and 40 down from device position.
+                electrodes_ref.move((position[0] + i * spacing +(11.6 if add_or_sub else 138.5), position[1] + (375.2 if add_or_sub else
+                                                                                                             -283.8))).flatten()
             else:
                 device = label_component.add_ref(gf.components.straight(length=250, width=310, layer=(2, 0)))
-                text.move((position[0], position[1] - i * spacing)).flatten()  # Move vertically
-                device.move((position[0] + (300 if add_or_sub else -330), position[1] - i * spacing + 50)).flatten()  # Move vertically
+                text.move((position[0], position[1] - i * spacing)).flatten()
+                device.move((position[0] + (300 if add_or_sub else -330), position[1] - i * spacing + 50)).flatten()
+
+                electrode_component = add_electrodes_to_coupon()
+                electrodes_ref = label_component.add_ref(electrode_component).drotate(180 if add_or_sub else 0)
+                # Place electrodes with an offset: 60 to the right and 40 down from device position.
+                electrodes_ref.move((position[0] +48 + (451.5 if add_or_sub else -330), position[1] - i * spacing + (111.1 if add_or_sub else
+                                                                                                                      -12))).flatten()
+
         return label_component
 
-    # Define positions for Left, Right, Top, Bottom
     positions = {
-        "Left": (750, 2050, False, False),  # Vertical
-        "Right": (2000, 2050, False, True),  # Vertical
-        "Top": (800, 2150, True, True),  # Horizontal
-        "Bottom": (810, 750, True, False),  # Horizontal
+        "Left": (750, 2050, False, False),
+        "Right": (2000, 2050, False, True),
+        "Top": (800, 2150, True, True),
+        "Bottom": (810, 750, True, False),
     }
 
-    # Function to create and save different versions
     def save_label_gds(chip_name, include_ti=True):
-        label_component = gf.Component()
-
-        # Background layers
+        label_component = gf.Component(name=f"labels_{chip_name}")
         label_component.add_ref(gf.components.straight(length=3000, width=3000, layer=(3, 0))).dmovey(1500).flatten()
         label_component.add_ref(gf.components.straight(length=2200, width=2200, layer=(4, 0))).dmovey(1500).dmovex(400).flatten()
 
-        # Add all label sets
         for _, (x, y, is_horizontal, add_or_sub) in positions.items():
             label_component.add_ref(
                 create_labels_component(
@@ -1954,21 +1944,198 @@ def main():
                 )
             ).flatten()
 
-        # Save the GDS file
         labels_gds_file = os.path.join(base_directory, f"{chip_name}-{today_date}.gds")
         label_component.write_gds(labels_gds_file)
         print(f"GDS saved to {labels_gds_file}")
         label_component.show()
 
-    # Save three different label GDS files
     save_label_gds("QT-MDM3.4")
     save_label_gds("QT-MDM3.5")
-    save_label_gds("QT-MDM3.6", include_ti=False)  # Exclude "Ti" for 3.6
+    save_label_gds("QT-MDM3.6", include_ti=False)
 
+
+def add_electrodes_to_coupon(coupon = gf.Component()):
+    c=gf.Component()
+
+    middle_e = gf.Component().add_ref(gf.components.straight(length=40, width=77, layer=(2, 0))).dmovex(48).dmovey(99.5)
+    height=230
+    x_pos=280
+    pad_h=120
+
+    points = [(53.2, 135), (62, 135), (62, 150)]
+    substitute = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
+
+    points = [(48, 137.5), (60, 137.5), (60, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
+        gf.components.straight(length=150,width=pad_h,layer=(2,0))).move((x_pos-50,height)),operation="or",layer=(2,0)))
+    height-=80
+    x_pos +=180
+
+    points = [(80, 137.5), (80, 170), (210, 170), (210, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(
+        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
+                   operation="or", layer=(2, 0)))
+    height -= 80
+    x_pos -= 180
+
+    points = [(48, 103), (160, 103), (160, 94), (180, 94), (180, 125), (230, 125), (230, height), (x_pos,height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(
+        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
+                   operation="or", layer=(2, 0)))
+    height -= 80
+    x_pos += 180
+
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(107)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
+
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(101)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
+
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(73)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
+
+    points = [(80, 95),(120, 95), (120, 83), (160, 83), (160, 74), (180, 74), (180, 85), (220, 85), (220, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(
+        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
+                   operation="or", layer=(2, 0)))
+    height -= 80
+    x_pos -= 180
+
+    points = [(80, 63), (160, 63), (160, 54), (180, 54), (180, 65), (210, 65), (210, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(
+        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
+                   operation="or", layer=(2, 0)))
+
+    # DC top up
+    points = [(48, 137.5), (44.6, 137.5), (44.6, 129.55)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1,width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC top middle1
+    points = [(48, 121), (44.6, 121), (44.6, 124.65)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC top middle2
+    points = [(44.6, 124.65),(44.6, 117.35)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC top down
+    points = [(48, 104),(44.6, 104),(44.6, 112.45)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC bot up
+    points = [(45.25, 104), (45.25, 95.55)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC bot middle1
+    points = [(48, 87), (45.25, 87), (45.25, 90.65)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC bot middle2
+    points = [(45.25, 87), (45.25, 83.35)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # DC bot down
+    points = [(48, 70), (45.25, 70), (45.25, 78.45)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o2'])
+    middle_e = coupon.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+
+    # coupon.show()
+    return coupon
+
+def run_electrodes_mode(coupon_gds_path, base_directory, today_date):
+    # Load the coupon design from the existing GDS file.
+    # Here we use gdsfactory's import function.
+    coupon = gf.import_gds(coupon_gds_path)
+
+    # Add the electrodes to the coupon design.
+    coupon_with_electrodes = add_electrodes_to_coupon(coupon)
+
+    # Save the updated design to a new GDS file.
+    electrodes_gds_file = os.path.join(base_directory, f"Electrodes_{today_date}.gds")
+    coupon_with_electrodes.write_gds(electrodes_gds_file)
+    print(f"Updated coupon with electrodes saved to {electrodes_gds_file}")
+    coupon_with_electrodes.show()
+
+
+def main():
+    clearance_width = 50
+    today_date = datetime.now().strftime("%d-%m-%y")
+    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
+
+    # Mode selection: coupon (default), labels, or electrodes
+    mode = "coupon"
+    mode = "labels"
+    mode = "electrodes"
+
+    coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_run_coupon_mode.oas"
+
+    if mode == "coupon":
+        run_coupon_mode(base_directory, today_date, clearance_width)
+    elif mode == "labels":
+        run_labels_mode(base_directory, today_date)
+    elif mode == "electrodes":
+        run_electrodes_mode(coupon_gds_path, base_directory, today_date)
+    else:
+        print(f"Unknown mode '{mode}'. Please choose 'coupon', 'labels', or 'electrodes'.")
 
 
 if __name__ == "__main__":
     main()
-
-
-
