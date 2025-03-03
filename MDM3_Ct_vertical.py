@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 
 from kfactory.kf_types import layer
+from shapely.ops import orient
 
 
 # # ------------------------------------------
@@ -172,8 +173,7 @@ def merge_references(base, refs, layer):
 
     return merged
 
-
-def create_spring(c, cross_section, start_pos):
+def create_spring_comb(c, cross_section, start_pos):
     """
     Create a spring-like geometry starting at 'start_pos'.
     Returns a list of references for subsequent boolean merges.
@@ -256,6 +256,34 @@ def create_spring(c, cross_section, start_pos):
 
     return refs
 
+def create_spring_vertical(c, cross_section, comb_spine):
+    """
+    Create a spring-like geometry starting at 'start_pos'.
+    Returns a list of references for subsequent boolean merges.
+    """
+    refs = []
+    vertical_l=3
+
+    # Taper that starts the spring
+    taper_start = gf.components.taper(length=0.15, width1=0.5, width2=0.15, layer=cross_section.layer)
+    taper_start_ref = c.add_ref(taper_start)
+    taper_start_ref.connect(port="o1", other=comb_spine.ports["o2"], allow_width_mismatch=True)
+    refs.append(taper_start_ref)
+
+    straight0 = gf.components.straight(cross_section=cross_section, length=vertical_l)
+    straight0_ref = c.add_ref(straight0)
+    straight0_ref.connect(port="in", other=taper_start_ref.ports["o2"], allow_width_mismatch=True)
+    refs.append(straight0_ref)
+
+
+
+    taper_end = gf.components.taper(length=0.5, width1=0.15, width2=0.8, layer=cross_section.layer)
+    taper_end_ref = c.add_ref(taper_end)
+    taper_end_ref.connect(port="o1", other=straight0_ref.ports["out"], allow_width_mismatch=True)
+    refs.append(taper_end_ref)
+
+    return refs
+
 def create_vertical_supports(c, layer, cnt1, cnt2,dy):
     """
     Creates vertical support tapers and shapes around the waveguide ports.
@@ -289,40 +317,9 @@ def create_vertical_supports(c, layer, cnt1, cnt2,dy):
     ts4_ref.dmove((cnt2[0], cnt2[1] + s3_len + 6.25))
     refs.append(ts4_ref)
 
-    # Horizontal large supports
-    support1 = c.add_ref(gf.components.straight(length=8.5, width=dy+3, layer=layer))
-    support1.dmove((cnt2[0] - 5, cnt2[1] - dy))
-    refs.append(support1)
-
-    taper_to_support1 = c.add_ref(gf.components.taper(length=4.5, width1=0.5, width2=dy+3, layer=layer))
-    taper_to_support1.connect(port="o2", other=support1.ports["o1"],allow_width_mismatch=True)
-    refs.append(taper_to_support1)
-
-    support2_l=17
-    support2 = c.add_ref(gf.components.straight(length=support2_l, width=dy+3, layer=layer))
-    support2.dmove((cnt1[0] - support2_l + 4, cnt1[1] -dy))
-    refs.append(support2)
-
-    taper_to_support2 = c.add_ref(gf.components.taper(length=4.5, width1=dy+3, width2=0.5, layer=layer))
-    taper_to_support2.connect(port="o1", other=support2.ports["o2"], allow_width_mismatch=True)
-    refs.append(taper_to_support2)
-
-    support3_l=32.5+dy*2.5
-    support3 = c.add_ref(gf.components.straight(length=support3_l, width=10, layer=layer))
-    support3.dmove((cnt1[0] - support3_l + 34, cnt1[1] + 6.5))
-    refs.append(support3)
-
-    circle_support = c.add_ref(gf.components.circle(radius=7, layer=layer))
-    circle_support.dmove((cnt1[0] + dy*2+2.8, cnt1[1] + 3.5))
-    refs.append(circle_support)
-
     return refs
 
-
-
-
-
-def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clearance_width=50):
+def create_dc_design_comb(resonator="fish", coupler_l=0.42,clearance_width=50):
     """
     Creates a DC design with a specified resonator type ("fish" or "other"),
     and waveguide/resonator widths.
@@ -342,6 +339,9 @@ def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clear
     sbend_length = dy*2  # S-bend length (microns)
     x_spacing = round(3 * tooth_width, 1)
     N_teeth = 12
+    output_taper_length=10
+    taper1_length, taper1_width2 = 3, 0.6
+    width_resonator = 0.42 if resonator == "fish" else 0.54
 
 
     layer_main = (1, 0)
@@ -370,7 +370,7 @@ def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clear
     )
 
     # --- Define Tapers and S-bends ---
-    taper1_length, taper1_width2 = 3, 0.6
+
     taper1 = gf.components.taper(
         length=taper1_length,
         width1=wg_width,
@@ -379,7 +379,7 @@ def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clear
     )
 
     taper_small_in = gf.components.taper(
-        length=10, width1=0.08, width2=wg_width, layer=layer_main
+        length=output_taper_length, width1=0.08, width2=wg_width, layer=layer_main
     )
     taper_small_in_ref = c.add_ref(taper_small_in)
     taper_small_in_ref.dmovex(-sbend_length - 10)
@@ -493,11 +493,8 @@ def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clear
     )
 
     # Build the spring segments
-    spring_refs = create_spring(
-        c=c,
-        cross_section=spring_cs,
-        start_pos=(comb_base.ports["o2"].x / 1000 -0.25, comb_base.ports["o2"].y / 1000 + tooth_length+0.3)
-    )
+    spring_refs = create_spring_comb(c=c, cross_section=spring_cs,
+                                     start_pos=(comb_base.ports["o2"].x / 1000 - 0.25, comb_base.ports["o2"].y / 1000 + tooth_length + 0.3))
     refs.append(spring_refs)
 
     # --- Vertical supports ---
@@ -527,26 +524,271 @@ def create_dc_design(resonator="fish", width_resonator=0.54,coupler_l=0.42,clear
     # Combine top + bottom waveguides
     combined_dc = gf.boolean(A=top_waveguide, B=bot_waveguide_ref, operation="or", layer=layer_main)
 
+    #########################
+
+    thick_cs = gf.CrossSection(
+        sections=[gf.Section(width=3, layer=layer_main, port_names=("in", "out"))],
+        radius_min=0.15
+    )
+
+    thick_dc = gf.Component()
+
+    # Straight section along the first taper
+    straight1 = gf.components.straight(length=output_taper_length + 2 * taper1_length, cross_section=thick_cs)
+    s1 = thick_dc.add_ref(straight1)
+    s1.connect(port="in", other=taper_small_in_ref.ports["o2"], allow_width_mismatch=True)
+    s1.dmovex(-output_taper_length)
+
+    # First S-bend section (same as the original code)
+    thick_s_bend1 = gf.components.bend_s(size=(sbend_length, -dy - wg_width / 2), cross_section=thick_cs)
+    b1 = thick_dc.add_ref(thick_s_bend1)
+    b1.connect(port="in", other=s1.ports["out"])
+
+    # Straight coupler section along the resonator
+    straight2 = gf.components.straight(length=coupler_l, cross_section=thick_cs)
+    s2 = thick_dc.add_ref(straight2)
+    s2.connect(port="in", other=b1.ports["out"])
+
+    # Second S-bend section (mirror of the first one)
+    thick_s_bend2 = gf.components.bend_s(size=(sbend_length, dy + wg_width / 2), cross_section=thick_cs)
+    b2 = thick_dc.add_ref(thick_s_bend2)
+    b2.connect(port="in", other=s2.ports["out"])
+
+    # Final straight section after the second S-bend
+    final_straight = gf.components.straight(length=taper1_length + 5.379, cross_section=thick_cs)
+    s3 = thick_dc.add_ref(final_straight)
+    s3.connect(port="in", other=b2.ports["out"])
+
+    # Create bottom mirrored version
+    thick_dc_ref_bot = gf.Component().add_ref(thick_dc).mirror_y()
+
+    # Combine top and bottom thick DC into one component
+    combined_thick_dc = gf.boolean(A=thick_dc, B=thick_dc_ref_bot, operation="or", layer=layer_main)
+
+    #########################
+
     # --- Subtract combined waveguide from a large rectangle to get final geometry ---
     bounding_rect = gf.components.straight(
-        length=sbend_length * 2 + N_teeth*x_spacing+25.24-0.209+clearance_width+coupler_l,
+        length=N_teeth*x_spacing+1.55,
         width=dy * 2.5 + 16,
         layer=layer_main
     )
-    bounding_rect_ref = gf.Component().add_ref(bounding_rect)
-    bounding_rect_ref.dmovex(-21.6-clearance_width)
+    bounding_rect_ref = c.add_ref(bounding_rect)
+    bounding_rect_ref.dmovex(25.5)
     bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50,layer=layer_main)).dmovex(-21.6-clearance_width)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=bounding_ext, operation="or", layer=layer_main)
+    bounding_rect_ref = c.add_ref(gf.boolean(A=bounding_rect_ref, B=combined_thick_dc, operation="or", layer=layer_main))
+
 
     dc_positive = gf.boolean(A=bounding_rect_ref, B=combined_dc, operation="A-B", layer=layer_main)
 
 
+
     return dc_positive
 
+def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50):
+    """
+    Creates a DC design with a specified resonator type ("fish" or "other"),
+    and waveguide/resonator widths.
+
+    Returns
+    -------
+    dc_positive : gf.Component
+        A GDS component representing the final boolean geometry.
+    """
+    c = gf.Component()
+
+    # General parameters
+    wg_width = 0.25       # Waveguide width (microns)
+    tooth_width = 0.5
+    tooth_length = 5
+    dy = tooth_length+0.8  # Vertical offset (microns)
+    sbend_length = dy*2  # S-bend length (microns)
+    x_spacing = round(3 * tooth_width, 1)
+    N_teeth = 12
+    output_taper_length=10
+    taper1_length, taper1_width2 = 3, 0.6
+    width_resonator = 0.42 if resonator == "fish" else 0.54
 
 
+    layer_main = (1, 0)
+    refs=[]
+
+    # --- Load fish or alternative resonator geometry ---
+    gds_path = Path("QT14_v1.gds") if resonator == "fish" else Path("QT10.gds")
+    fish_component = gf.import_gds(gds_path)
+    fish_component.add_port(
+        name="o1", center=(0, 0), width=0.5, orientation=180, layer=layer_main
+    )
+
+    fish_component.add_port(
+        name="o2",
+        center=(fish_component.size_info.width - 0.05,0),
+        width=0.5,
+        orientation=0,
+        layer=layer_main,
+    )
 
 
+    # Cross-section for S-bend
+    x_sbend = gf.CrossSection(
+        sections=[gf.Section(width=wg_width, layer=layer_main, port_names=("in", "out"))],
+        radius_min=0.15
+    )
+
+    # --- Define Tapers and S-bends ---
+
+    taper1 = gf.components.taper(
+        length=taper1_length,
+        width1=wg_width,
+        width2=taper1_width2,
+        layer=layer_main
+    )
+
+    taper_small_in = gf.components.taper(
+        length=output_taper_length, width1=0.08, width2=wg_width, layer=layer_main
+    )
+    taper_small_in_ref = c.add_ref(taper_small_in)
+    taper_small_in_ref.dmovex(-sbend_length - 10)
+    taper_small_in_ref.dmovey(dy + wg_width/2 + 0.12)
+    refs.append(taper_small_in_ref)
+
+    taper1_ref = c.add_ref(taper1)
+    taper1_ref.connect(port="o1", other=taper_small_in_ref.ports["o2"])
+    refs.append(taper1_ref)
+
+    taper1_mirror = c.add_ref(taper1).mirror_x()
+    taper1_mirror.connect(port="o2", other=taper1_ref.ports["o2"], allow_width_mismatch=True)
+    refs.append(taper1_mirror)
+
+    sbend = gf.components.bend_s(
+        cross_section=x_sbend, size=(sbend_length, -dy - wg_width / 2)
+    )
+    sbend_ref = c.add_ref(sbend)
+    sbend_ref.connect(port="in", other=taper1_mirror.ports["o1"], allow_width_mismatch=True)
+    refs.append(sbend_ref)
+
+    coupler_ref = c.add_ref(gf.components.straight(length=coupler_l,width=wg_width,layer=layer_main))
+    coupler_ref.connect(port="o1", other=sbend_ref.ports["out"], allow_width_mismatch=True)
+    refs.append(coupler_ref)
+
+    sbend_ref_mirror = c.add_ref(sbend).mirror_x()
+    sbend_ref_mirror.connect(port="in", other=coupler_ref.ports["o2"])
+    refs.append(sbend_ref_mirror)
+
+    taper1_ref_2 = c.add_ref(gf.components.taper(length=taper1_length, width1=wg_width, width2=width_resonator, layer=layer_main))
+    taper1_ref_2.connect(port="o1", other=sbend_ref_mirror.ports["out"], allow_width_mismatch=True)
+    refs.append(taper1_ref_2)
+
+    # --- Attach fish component ---
+    fish_ref = c.add_ref(fish_component)
+    fish_ref.connect(port="o1", other=taper1_ref_2.ports["o2"], allow_width_mismatch=True)
+    refs.append(fish_ref)
+
+    # --- Spine component ---
+    comb_spine = c.add_ref(gf.components.straight(length=3, width=0.972 if resonator=="fish" else 0.55, layer=layer_main))
+    comb_spine.connect(port="o1", other=fish_ref.ports["o2"], allow_width_mismatch=True)
+    refs.append(comb_spine)
+    if resonator == "extractor":
+        comb_spine.dmovex(-0.2)
+
+
+    # --- SPRING cross-section + geometry ---
+    spring_cs = gf.CrossSection(
+        sections=[gf.Section(width=0.15, layer=layer_main, port_names=("in", "out"))],
+        radius_min=0.15
+    )
+
+    # Build the spring segments
+    spring_refs = create_spring_vertical(c=c, cross_section=spring_cs,comb_spine=comb_spine)
+    refs.append(spring_refs)
+
+    # --- Vertical supports ---
+    cnt1_x = taper1_ref.ports["o2"].center[0] / 1000
+    cnt1_y = taper1_ref.ports["o2"].center[1] / 1000
+    cnt2_x = taper1_ref_2.ports["o2"].center[0] / 1000+1.3
+    cnt2_y = taper1_ref.ports["o2"].center[1] / 1000
+
+    vertical_supports = create_vertical_supports(c=c,layer=layer_main,cnt1=(cnt1_x, cnt1_y),cnt2=(cnt2_x, cnt2_y),dy=dy)
+    refs.append(vertical_supports)
+
+    # --- Construct top waveguide geometry with boolean OR ---
+    top_waveguide = gf.boolean(
+        A=taper_small_in_ref, B=taper1_ref, operation="or", layer=layer_main
+    )
+
+    top_waveguide = merge_references(top_waveguide, refs, layer_main)
+
+    # Merge all references
+
+    # Create mirrored waveguide (bot_waveguide)
+    bot_waveguide_ref = gf.Component().add_ref(top_waveguide).mirror_y()
+    # Shift if necessary: .dmovey(dy*0) does nothing, but keep it for clarity:
+    bot_waveguide_ref.dmovey(dy * 0)
+
+    # Combine top + bottom waveguides
+    combined_dc = gf.boolean(A=top_waveguide, B=bot_waveguide_ref, operation="or", layer=layer_main)
+
+    ######## Thick DC #######
+
+    thick_cs = gf.CrossSection(
+        sections=[gf.Section(width=3, layer=layer_main, port_names=("in", "out"))],
+        radius_min=0.15
+    )
+
+    thick_dc = gf.Component()
+
+    # Straight section along the first taper
+    straight1 = gf.components.straight(length=output_taper_length + 2 * taper1_length, cross_section=thick_cs)
+    s1 = thick_dc.add_ref(straight1)
+    s1.connect(port="in", other=taper_small_in_ref.ports["o2"], allow_width_mismatch=True)
+    s1.dmovex(-output_taper_length)
+
+    # First S-bend section (same as the original code)
+    thick_s_bend1 = gf.components.bend_s(size=(sbend_length, -dy - wg_width / 2), cross_section=thick_cs)
+    b1 = thick_dc.add_ref(thick_s_bend1)
+    b1.connect(port="in", other=s1.ports["out"])
+
+    # Straight coupler section along the resonator
+    straight2 = gf.components.straight(length=coupler_l, cross_section=thick_cs)
+    s2 = thick_dc.add_ref(straight2)
+    s2.connect(port="in", other=b1.ports["out"])
+
+    # Second S-bend section (mirror of the first one)
+    thick_s_bend2 = gf.components.bend_s(size=(sbend_length, dy + wg_width / 2), cross_section=thick_cs)
+    b2 = thick_dc.add_ref(thick_s_bend2)
+    b2.connect(port="in", other=s2.ports["out"])
+
+    # Final straight section after the second S-bend
+    final_straight = gf.components.straight(length=taper1_length + 5.379, cross_section=thick_cs)
+    s3 = thick_dc.add_ref(final_straight)
+    s3.connect(port="in", other=b2.ports["out"])
+
+    # Create bottom mirrored version
+    thick_dc_ref_bot = gf.Component().add_ref(thick_dc).mirror_y()
+
+    # Combine top and bottom thick DC into one component
+    combined_thick_dc = gf.boolean(A=thick_dc, B=thick_dc_ref_bot, operation="or", layer=layer_main)
+
+    #########################
+
+    # --- Subtract combined waveguide from a large rectangle to get final geometry ---
+    bounding_rect = gf.components.straight(length=7.3,width=dy * 2.5 + 0.6,layer=layer_main)
+    bounding_rect_ref = c.add_ref(bounding_rect).dmovex(25.5)
+    bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50,layer=layer_main)).dmovex(-21.6-clearance_width)
+    bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=bounding_ext, operation="or", layer=layer_main)
+
+    ext1=c.add_ref(gf.components.straight(length=20,width=3,layer=layer_main)).dmovex(30).dmovey(3)
+    bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
+
+    ext1 = c.add_ref(gf.components.straight(length=10, width=3, layer=layer_main)).dmovex(30).dmovey(3)
+    bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
+
+    bounding_rect_ref = c.add_ref(gf.boolean(A=bounding_rect_ref, B=combined_thick_dc, operation="or", layer=layer_main))
+
+    dc_positive = gf.boolean(A=bounding_rect_ref, B=combined_dc, operation="A-B", layer=layer_main)
+
+    return dc_positive
 
 def create_bent_taper(taper_length, taper_width1, taper_width2, bend_radius, bend_angle, enable_sbend=False):
     """
@@ -1529,13 +1771,9 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
     return c
 
-
-
-
-
 def create_long_waveguide(start: tuple, end: tuple, length: float, width: float = 0.5,
                           layer: tuple = (1, 0), arc_radius: float = 22,
-                          support_width: float = 0.6, support_length: float = 3, support_spacing: float = 20,
+                          support_width: float = 0.6, support_length: float = 3, support_spacing: float = 22,
                           taper_length: float = 10, taper_width1: float = 0.08,clearance_width=50):
     """
     Creates a long waveguide with defined start and end points using straights and arcs,
@@ -1598,13 +1836,14 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
 
     # Function to add support structures inside waveguide_with_supports
     def add_supports_along_straight(x_start, y_start, length, is_vertical=False):
-        num_supports = int(length // support_spacing)  # Calculate number of supports
+        num_supports = int(round((length-2) / support_spacing,0))  # Calculate number of supports
+        # print((length-2) / support_spacing)
         # Create support component
         support = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
-        for i in range(1, num_supports + 1 + (1 if is_vertical else 0)):
+        for i in range(1, num_supports + 2 ):
             if is_vertical:
                 support_x = x_start  # X remains the same
-                support_y = y_start + i * support_spacing  # Increment Y for vertical section
+                support_y = y_start + i * (support_spacing -2) # Increment Y for vertical section
                 # support_y = round(y_start + i * support_spacing, -1)  # Snap Y to nearest 10 µm
             else:
                 support_x = x_start + i * support_spacing  # Increment X for horizontal section
@@ -1625,16 +1864,16 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
                 waveguide_with_supports.add_ref(support).drotate(180).move((support_x + support_length, support_y))  # Right
 
     # Add supports in first horizontal section
-    add_supports_along_straight(start[0] + taper_length, start[1], first_straight_length, is_vertical=False)
+    add_supports_along_straight(start[0] -10, start[1], first_straight_length, is_vertical=False)
 
     # Add supports in vertical section
     upward_section_start_x = start[0] + first_straight_length + arc_radius+taper_length
-    upward_section_start_y = start[1] + arc_radius / 2
+    upward_section_start_y = start[1] + arc_radius / 2-2
     add_supports_along_straight(upward_section_start_x, upward_section_start_y, vertical_straight_length, is_vertical=True)
 
     # Add supports in last horizontal section
-    last_section_start_x = start[0]
-    last_section_start_y = upward_section_start_y + vertical_straight_length + arc_radius * 3 / 2
+    last_section_start_x = start[0]-10
+    last_section_start_y = upward_section_start_y + vertical_straight_length + arc_radius * 3 / 2+2
     add_supports_along_straight(last_section_start_x, last_section_start_y, last_straight_length, is_vertical=False)
 
     # Generate the **wider path** that will be used for subtraction
@@ -1660,10 +1899,7 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
 
     return cutout_component
 
-
-
-
-def create_design(clearance_width=50):
+def create_design(clearance_width=50,to_debug=False):
     length_mmi = 79
     total_width_mmi = 10
     width_mmi = 6
@@ -1674,128 +1910,127 @@ def create_design(clearance_width=50):
     c = gf.Component()
 
 
-    config = {"N_Bulls_eye": 0, "add_logo": True, "add_rectangle": True, "add_scalebar": True, }
-    config = {"N_Bulls_eye": 0, "add_logo": True, "add_rectangle": False, "add_scalebar": True, }
+    config = {"Long_WG":True, "Resonators":True, "N_Bulls_eye": 0, "add_logo": True, "add_rectangle": False, "add_scalebar": True, }
 
+    if to_debug:
+        config = {"Long_WG":False, "Resonators":False, "N_Bulls_eye": 0, "add_logo": False, "add_rectangle": False, "add_scalebar": False, }
 
     params = {"is_resist_positive": True, "resonator_type": "fish", "length_mmi": length_mmi, "width_mmi": width_mmi, "total_width_mmi": 30,
         "taper_length_in": 20, "y_spacing": y_spacing / 2, }
 
-    bbox_component = create_bbox_component(length_mmi=length_mmi, total_width_mmi=total_width_mmi,taper_length=params["taper_length_in"],
-                                           clearance_width=clearance_width)
 
-    arc_radius = 35
-    wg_length = 520
-    offset_step = 9
-    length_step = 70
+    if config["Resonators"]:
+        width_resonator = 0.42 if params["resonator_type"]=="fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
+                  taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                  taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
-    for i in range(3):
-        start_y = offset_y - (35.5 - i * offset_step)
-        end_y = offset_y + (161 - i * offset_step)
-        c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius,clearance_width=clearance_width)).flatten()
-        wg_length -= length_step
+        params["resonator_type"] = "extractor"
+        offset_y+=y_spacing
+        width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
+                  taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                  taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
+        bbox_component = create_bbox_component(length_mmi, total_width_mmi,clearance_width=clearance_width)
+        params["taper_length_in"] = 10
+        offset_y += y_spacing
+        width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y , short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
-    width_resonator = 0.42 if params["resonator_type"]=="fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
-              taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y-y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-              taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        params["resonator_type"] = "fish"
+        offset_y += y_spacing
+        width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
-    params["resonator_type"] = "extractor"
-    offset_y+=y_spacing
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
-              taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-              taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        offset_y += y_spacing
+        params["weird_support"]=True
+        width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
-    bbox_component = create_bbox_component(length_mmi, total_width_mmi,clearance_width=clearance_width)
-    params["taper_length_in"] = 10
-    offset_y += y_spacing
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y , short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        offset_y += y_spacing
+        params["resonator_type"] = "extractor"
+        width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
+        c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
+                                          short_taper_width2_right=width_resonator,
+                                          taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
-    params["resonator_type"] = "fish"
-    offset_y += y_spacing
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-
-    offset_y += y_spacing
-    params["weird_support"]=True
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-
-    offset_y += y_spacing
-    params["resonator_type"] = "extractor"
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y, short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-    c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y - y_spacing/2,
-                                      short_taper_width2_right=width_resonator,
-                                      taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
-
-
-    #######################################        DIRECTIONAL COUPLER           ###################
+    ###################   DIRECTIONAL COUPLER   ###################
     offset_y += 12
     params["resonator_type"] = "fish"
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_dc_design(resonator=params["resonator_type"],width_resonator=width_resonator,coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
+    c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
+                                    coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
 
-    # offset_y += 26
-    # width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    # c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
-    #
-    offset_y += 34
-    params["resonator_type"] = "extractor"
-    width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator,coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
-    #
-    # offset_y += 11
-    # width_resonator = 0.42 if params["resonator_type"] == "fish" else 0.54
-    # c.add_ref(create_dc_design(resonator=params["resonator_type"], width_resonator=width_resonator)).dmovey(offset_y).dmovex(15).flatten()
-
+    if not to_debug:
+        offset_y += 18
+        params["resonator_type"] = "extractor"
+        c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
+                                        coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
+        offset_y += 26
+        c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
+                                            coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
+        offset_y += 34
+        params["resonator_type"] = "fish"
+        c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
+                                        coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
 
     if config["N_Bulls_eye"] > 0:
         add_bulls_eye(c, config["N_Bulls_eye"], 150)
 
     if config["add_logo"]:
-        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-100).flatten()
+        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-160).flatten()
 
     if config["add_scalebar"]:
-        add_scalebars(c, 25, offset_y-70)
+        add_scalebars(c, 25, offset_y-130)
 
-    ###############################    CIRCULAR TEST PATTERN    #############
+    #####################    CIRCULAR TEST PATTERN    #############
+    if not to_debug:
+        circ=gf.boolean(
+                A=gf.components.circle(radius=3, layer=(1, 0)),
+                B=gf.components.circle(radius=1, layer=(1, 0)),
+                operation="A-B",
+                layer=(1, 0),
+            )
+        c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(45).dmovey(offset_y-110).flatten()
 
-    circ=gf.boolean(
-            A=gf.components.circle(radius=3, layer=(1, 0)),
-            B=gf.components.circle(radius=1, layer=(1, 0)),
+        circ = gf.boolean(
+            A=gf.components.circle(radius=6, layer=(1, 0)), #        B=gf.components.circle(radius=3, layer=(1, 0)),
+            B=gf.components.straight(length=2,width=3,layer=(1,0)),
             operation="A-B",
             layer=(1, 0),
         )
-    c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(100).dmovey(offset_y-10).flatten()
+        c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 115).flatten()
 
-    circ = gf.boolean(
-        A=gf.components.circle(radius=6, layer=(1, 0)), #        B=gf.components.circle(radius=3, layer=(1, 0)),
-        B=gf.components.straight(length=2,width=3,layer=(1,0)),
-        operation="A-B",
-        layer=(1, 0),
-    )
-    c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 50).flatten()
+    ###########################    Long WG    ######################
+    if config["Long_WG"]:
+        arc_radius = 35
+        wg_length = 660
+        offset_step = 9
+        length_step = 100
+
+        for i in range(3):
+            start_y = - (35.5 - i * offset_step)
+            end_y = offset_y + (38 - i * offset_step)
+            c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius,clearance_width=clearance_width)).flatten()
+            wg_length -= length_step
 
     ############################## TEXT !!!!!! #####################
     #
@@ -1808,7 +2043,6 @@ def create_design(clearance_width=50):
 
     # c.show()
     return c
-
 
 def merge_layer(component, layer=(1, 0)):
     """
@@ -1838,10 +2072,6 @@ def merge_layer(component, layer=(1, 0)):
 
     return merged_component
 
-
-
-
-
 def create_fillet(radius = 0.15):
     c = gf.Component()
 
@@ -1858,18 +2088,17 @@ def create_fillet(radius = 0.15):
 
     return result
 
-
-def run_coupon_mode(base_directory, today_date, clearance_width):
+def run_coupon_mode(base_directory, today_date, clearance_width,to_debug):
     # Coupon mode: create coupon design (without electrodes).
-    c = merge_layer(create_design(clearance_width=clearance_width), layer=(1, 0))
-    c.add_ref(gf.components.straight(length=10, width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
-    c.add_ref(gf.components.straight(length=10, width=50)).dmovey(191).dmovex(-clearance_width).flatten()
+    c = merge_layer(create_design(clearance_width=clearance_width,to_debug=to_debug), layer=(1, 0))
+    if not to_debug:
+        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
+        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(235).dmovex(-clearance_width).flatten()
 
-    # Save GDS file
-    gds_output_file = os.path.join(base_directory, f"Left MDM-{today_date}.gds")
-    c.write_gds(gds_output_file)
-    print(f"GDS saved to {gds_output_file}")
-    c.show()
+         # Save GDS file
+        gds_output_file = os.path.join(base_directory, f"Left MDM-{today_date}.gds")
+        c.write_gds(gds_output_file)
+        print(f"GDS saved to {gds_output_file}")
 
     # Create rotated versions and save them
     def save_rotated(original, angle, name):
@@ -1881,10 +2110,12 @@ def run_coupon_mode(base_directory, today_date, clearance_width):
         print(f"GDS saved to {gds_file}")
         rotated.show()
 
-    save_rotated(c, 90, "Bottom")
-    save_rotated(c, 180, "Right")
-    save_rotated(c, 270, "Top")
+    if not to_debug:
+        save_rotated(c, 90, "Bottom")
+        save_rotated(c, 180, "Right")
+        save_rotated(c, 270, "Top")
 
+    c.show()
 
 def run_labels_mode(base_directory, today_date):
     # Die labels mode: create and save the full die labels.
@@ -1953,152 +2184,76 @@ def run_labels_mode(base_directory, today_date):
     save_label_gds("QT-MDM3.5")
     save_label_gds("QT-MDM3.6", include_ti=False)
 
+def add_electrodes_to_coupon(coupon=gf.Component()):
+    c = gf.Component()
 
-def add_electrodes_to_coupon(coupon = gf.Component()):
-    c=gf.Component()
+    c.add_ref(gf.boolean(A=coupon, B=coupon, operation="or", layer=(1, 0)))
 
-    middle_e = gf.Component().add_ref(gf.components.straight(length=40, width=77, layer=(2, 0))).dmovex(48).dmovey(99.5)
-    height=230
-    x_pos=280
-    pad_h=120
+    height = 230
+    x_pos = 330
+    y_pos = 100  # Base y position
+    pad_h = 120
 
-    points = [(53.2, 135), (62, 135), (62, 150)]
+    middle_e = gf.Component().add_ref(gf.components.straight(length=40, width=72, layer=(2, 0))).dmovex(48).dmovey(y_pos + 45)
+
+    points = [(53.2, y_pos + 79), (58, y_pos + 79), (58, y_pos + 94)]
     substitute = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
 
-    points = [(48, 137.5), (60, 137.5), (60, height), (x_pos, height)]
+    points = [(48, y_pos + 81.5), (56, y_pos + 81.5), (56, height), (x_pos, height)]
     addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150,width=pad_h,layer=(2,0))).move((x_pos-50,height)),operation="or",layer=(2,0)))
-    height-=80
-    x_pos +=180
-
-    points = [(80, 137.5), (80, 170), (210, 170), (210, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(
-        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
-                   operation="or", layer=(2, 0)))
-    height -= 80
-    x_pos -= 180
-
-    points = [(48, 103), (160, 103), (160, 94), (180, 94), (180, 125), (230, 125), (230, height), (x_pos,height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(
-        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
-                   operation="or", layer=(2, 0)))
+        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
     height -= 80
     x_pos += 180
 
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(107)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(101)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(73)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    points = [(80, 95),(120, 95), (120, 83), (160, 83), (160, 74), (180, 74), (180, 85), (220, 85), (220, height), (x_pos, height)]
+    points = [(78, y_pos + 75), (78, y_pos + 114), (260, y_pos + 114), (260, height), (x_pos, height)]
     addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(
-        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
-                   operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
+        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
     height -= 80
     x_pos -= 180
 
-    points = [(80, 63), (160, 63), (160, 54), (180, 54), (180, 65), (210, 65), (210, height), (x_pos, height)]
+    points = [(48, y_pos + 47), (140, y_pos + 47), (140, y_pos + 41), (180, y_pos + 41),
+              (180, y_pos + 52), (230, y_pos + 52), (230, y_pos + 23), (260, y_pos + 23), (260, height), (x_pos, height)]
     addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(
-        gf.boolean(A=middle_e, B=gf.Component().add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)),
-                   operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
+        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
+    height -= 80
+    x_pos += 180
 
-    # DC top up
-    points = [(48, 137.5), (44.6, 137.5), (44.6, 129.55)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1,width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 51)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
 
-    # DC top middle1
-    points = [(48, 121), (44.6, 121), (44.6, 124.65)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 45)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
 
-    # DC top middle2
-    points = [(44.6, 124.65),(44.6, 117.35)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 17)
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
 
-    # DC top down
-    points = [(48, 104),(44.6, 104),(44.6, 112.45)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    points = [(80, y_pos + 39), (120, y_pos + 39), (120, y_pos + 21), (180, y_pos + 21),
+              (180, y_pos + 12), (220, y_pos + 12), (220, y_pos + 43 - 100), (270, y_pos + 43 - 100), (270, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
+        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)), operation="or", layer=(2, 0)))
+    height -= 80
+    x_pos -= 180
 
-    # DC bot up
-    points = [(45.25, 104), (45.25, 95.55)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    points = [(80, y_pos + 15), (140, y_pos + 15), (140, y_pos + 81 -100), (180, y_pos + 81 -100), (180, y_pos +12-100),
+              (220, y_pos +12-100),(220, y_pos +3-100),(260, y_pos +3-100), (260, height), (x_pos, height)]
+    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
     middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
+    middle_e = coupon.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
+        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
 
-    # DC bot middle1
-    points = [(48, 87), (45.25, 87), (45.25, 90.65)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
 
-    # DC bot middle2
-    points = [(45.25, 87), (45.25, 83.35)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
 
-    # DC bot down
-    points = [(48, 70), (45.25, 70), (45.25, 78.45)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
-    addition1.connect(port='o1', other=addition.ports['o2'])
-    middle_e = coupon.add_ref(gf.boolean(A=middle_e, B=addition1, operation="or", layer=(2, 0)))
-
-    # coupon.show()
     return coupon
+
 
 def run_electrodes_mode(coupon_gds_path, base_directory, today_date):
     # Load the coupon design from the existing GDS file.
@@ -2114,28 +2269,28 @@ def run_electrodes_mode(coupon_gds_path, base_directory, today_date):
     print(f"Updated coupon with electrodes saved to {electrodes_gds_file}")
     coupon_with_electrodes.show()
 
-
 def main():
     clearance_width = 50
+    to_debug = False
     today_date = datetime.now().strftime("%d-%m-%y")
     base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
 
     # Mode selection: coupon (default), labels, or electrodes
     mode = "coupon"
-    mode = "labels"
-    mode = "electrodes"
+    # mode = "labels"
+    # mode = "electrodes"
 
-    coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_run_coupon_mode.oas"
+    # coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_comb_run_coupon_mode.oas"
+    coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_vertical_run_coupon_mode.oas"
 
     if mode == "coupon":
-        run_coupon_mode(base_directory, today_date, clearance_width)
+        run_coupon_mode(base_directory, today_date, clearance_width,to_debug)
     elif mode == "labels":
         run_labels_mode(base_directory, today_date)
     elif mode == "electrodes":
         run_electrodes_mode(coupon_gds_path, base_directory, today_date)
     else:
         print(f"Unknown mode '{mode}'. Please choose 'coupon', 'labels', or 'electrodes'.")
-
 
 if __name__ == "__main__":
     main()
