@@ -447,7 +447,7 @@ def create_dc_design_comb(resonator="fish", coupler_l=0.42,clearance_width=50):
     opposing_comb_spine_down_ext.connect(port="o2", other=opposing_comb_spine_down.ports["o1"], allow_width_mismatch=True)
     refs.append(opposing_comb_spine_down_ext)
 
-    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=.82, width1=dy+3,width2=0.5, layer=layer_main))
+    opposing_comb_spine_down_taper = c.add_ref(gf.components.taper(length=.82, width1=dy,width2=0.5, layer=layer_main))
     opposing_comb_spine_down_taper.connect(port="o2", other=opposing_comb_spine_down_ext.ports["o1"], allow_width_mismatch=True)
     refs.append(opposing_comb_spine_down_taper)
 
@@ -586,7 +586,7 @@ def create_dc_design_comb(resonator="fish", coupler_l=0.42,clearance_width=50):
 
     return dc_positive
 
-def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50):
+def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50,pad_x_offset=10):
     """
     Creates a DC design with a specified resonator type ("fish" or "other"),
     and waveguide/resonator widths.
@@ -777,13 +777,12 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     bounding_rect_ref = c.add_ref(bounding_rect).dmovex(25.5)
     bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50,layer=layer_main)).dmovex(-21.6-clearance_width)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=bounding_ext, operation="or", layer=layer_main)
-
-    ext1=c.add_ref(gf.components.straight(length=20,width=3,layer=layer_main)).dmovex(30).dmovey(3)
+    pad_h = 150
+    pad_l = 150
+    ext1 = c.add_ref(gf.components.straight(length=pad_x_offset, width=6, layer=layer_main)).dmovex(30)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
-
-    ext1 = c.add_ref(gf.components.straight(length=10, width=3, layer=layer_main)).dmovex(30).dmovey(3)
+    ext1 = c.add_ref(gf.components.straight(length=pad_l, width=pad_h, layer=layer_main)).dmovex(30+pad_x_offset).dmovey(72)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
-
     bounding_rect_ref = c.add_ref(gf.boolean(A=bounding_rect_ref, B=combined_thick_dc, operation="or", layer=layer_main))
 
     dc_positive = gf.boolean(A=bounding_rect_ref, B=combined_dc, operation="A-B", layer=layer_main)
@@ -1843,7 +1842,7 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
         for i in range(1, num_supports + 2 ):
             if is_vertical:
                 support_x = x_start  # X remains the same
-                support_y = y_start + i * (support_spacing -2) # Increment Y for vertical section
+                support_y = y_start + i * (support_spacing -2.6) # Increment Y for vertical section
                 # support_y = round(y_start + i * support_spacing, -1)  # Snap Y to nearest 10 µm
             else:
                 support_x = x_start + i * support_spacing  # Increment X for horizontal section
@@ -1974,20 +1973,18 @@ def create_design(clearance_width=50,to_debug=False):
                                           taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
     ###################   DIRECTIONAL COUPLER   ###################
-    offset_y += 12
     params["resonator_type"] = "fish"
     c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
-                                    coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
+                                    coupler_l=directional_coupler_l,pad_x_offset=180)).dmovey(offset_y+117).dmovex(21.6).flatten()
 
     if not to_debug:
-        offset_y += 18
         params["resonator_type"] = "extractor"
         c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
-                                        coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
-        offset_y += 26
+                                        coupler_l=directional_coupler_l)).dmovey(offset_y+140).dmovex(21.6).flatten()
+        offset_y += 19
         c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
                                             coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
-        offset_y += 34
+        offset_y += 36
         params["resonator_type"] = "fish"
         c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
                                         coupler_l=directional_coupler_l)).dmovey(offset_y).dmovex(21.6).flatten()
@@ -1996,10 +1993,10 @@ def create_design(clearance_width=50,to_debug=False):
         add_bulls_eye(c, config["N_Bulls_eye"], 150)
 
     if config["add_logo"]:
-        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-160).flatten()
+        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-130).flatten()
 
     if config["add_scalebar"]:
-        add_scalebars(c, 25, offset_y-130)
+        add_scalebars(c, 25, offset_y-100)
 
     #####################    CIRCULAR TEST PATTERN    #############
     if not to_debug:
@@ -2009,7 +2006,7 @@ def create_design(clearance_width=50,to_debug=False):
                 operation="A-B",
                 layer=(1, 0),
             )
-        c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(45).dmovey(offset_y-110).flatten()
+        c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(45).dmovey(offset_y-80).flatten()
 
         circ = gf.boolean(
             A=gf.components.circle(radius=6, layer=(1, 0)), #        B=gf.components.circle(radius=3, layer=(1, 0)),
@@ -2017,18 +2014,18 @@ def create_design(clearance_width=50,to_debug=False):
             operation="A-B",
             layer=(1, 0),
         )
-        c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 115).flatten()
+        c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 85).flatten()
 
     ###########################    Long WG    ######################
     if config["Long_WG"]:
         arc_radius = 35
-        wg_length = 660
+        wg_length = 640
         offset_step = 9
-        length_step = 100
+        length_step = 105
 
         for i in range(3):
-            start_y = - (35.5 - i * offset_step)
-            end_y = offset_y + (38 - i * offset_step)
+            start_y = -35.5 + i * offset_step
+            end_y = 173 - i * offset_step
             c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius,clearance_width=clearance_width)).flatten()
             wg_length -= length_step
 
@@ -2092,8 +2089,8 @@ def run_coupon_mode(base_directory, today_date, clearance_width,to_debug):
     # Coupon mode: create coupon design (without electrodes).
     c = merge_layer(create_design(clearance_width=clearance_width,to_debug=to_debug), layer=(1, 0))
     if not to_debug:
-        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(-65.5).dmovex(-clearance_width).flatten()
-        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(235).dmovex(-clearance_width).flatten()
+        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(-75).dmovex(-clearance_width).flatten()
+        c.add_ref(gf.components.straight(length=10, width=50)).dmovey(275).dmovex(-clearance_width).flatten()
 
          # Save GDS file
         gds_output_file = os.path.join(base_directory, f"Left MDM-{today_date}.gds")
@@ -2189,70 +2186,156 @@ def add_electrodes_to_coupon(coupon=gf.Component()):
 
     c.add_ref(gf.boolean(A=coupon, B=coupon, operation="or", layer=(1, 0)))
 
-    height = 230
-    x_pos = 330
-    y_pos = 100  # Base y position
     pad_h = 120
 
-    middle_e = gf.Component().add_ref(gf.components.straight(length=40, width=72, layer=(2, 0))).dmovex(48).dmovey(y_pos + 45)
+    label_text = "B"
+    c.add_ref(gf.components.straight(length=145, width=145, layer=(2, 0))).dmovex(64).dmovey(288)
+    points = [(50, 221), (50, 215), (68, 215)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    points = [(50, 208.9), (50, 215)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(60 + 60, 288 - 10), layer=(7, 0)))
 
-    points = [(53.2, y_pos + 79), (58, y_pos + 79), (58, y_pos + 94)]
-    substitute = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    points = [(48, y_pos + 81.5), (56, y_pos + 81.5), (56, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
-    height -= 80
-    x_pos += 180
-
-    points = [(78, y_pos + 75), (78, y_pos + 114), (260, y_pos + 114), (260, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
-    height -= 80
-    x_pos -= 180
-
-    points = [(48, y_pos + 47), (140, y_pos + 47), (140, y_pos + 41), (180, y_pos + 41),
-              (180, y_pos + 52), (230, y_pos + 52), (230, y_pos + 23), (260, y_pos + 23), (260, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
-    height -= 80
-    x_pos += 180
-
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 51)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 45)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    substitute = gf.Component().add_ref(gf.components.straight(length=35, width=2, layer=(2, 0))).dmovex(53.2).dmovey(y_pos + 17)
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=substitute, operation="A-B", layer=(2, 0)))
-
-    points = [(80, y_pos + 39), (120, y_pos + 39), (120, y_pos + 21), (180, y_pos + 21),
-              (180, y_pos + 12), (220, y_pos + 12), (220, y_pos + 43 - 100), (270, y_pos + 43 - 100), (270, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos-50, height)), operation="or", layer=(2, 0)))
-    height -= 80
-    x_pos -= 180
-
-    points = [(80, y_pos + 15), (140, y_pos + 15), (140, y_pos + 81 -100), (180, y_pos + 81 -100), (180, y_pos +12-100),
-              (220, y_pos +12-100),(220, y_pos +3-100),(260, y_pos +3-100), (260, height), (x_pos, height)]
-    addition = gf.Component().add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
-    middle_e = c.add_ref(gf.boolean(A=middle_e, B=addition, operation="or", layer=(2, 0)))
-    middle_e = coupon.add_ref(gf.boolean(A=middle_e, B=gf.Component().add_ref(
-        gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((x_pos - 50, height)), operation="or", layer=(2, 0)))
+    label_text = "A"
+    xp=430
+    yp=400
+    points = [(47.5, 221), (58, 221), (58, 400), (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp+60, yp-10), layer=(7, 0)))
 
 
+    label_text = "C"
+    xp+=170
+    yp-=70
+    points = [(47.5, 208.9), (58, 208.9), (58, 203), (220, 203), (220, 350), (400, 350), (400, yp), (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    points = [(50, 208.9), (50, 215)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    points = [(48, 198), (58, 198), (58, 203)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
 
-    return coupon
+    label_text = "D"
+    c.add_ref(gf.components.straight(length=145, width=145, layer=(2, 0))).dmovex(234).dmovey(265)
+    points = [(50, 198), (50, 192), (268, 192)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    points = [(50, 185.9), (50, 192)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(234 + 60, 265 - 10), layer=(7, 0)))
+
+    label_text = "E"
+    xp+=170
+    yp-=70
+    points = [(48, 185.9), (390, 185.9), (390, 185.9), (390, yp), (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp+60, yp-10), layer=(7, 0)))
+
+    label_text="F"
+    xp+=170
+    yp-=70
+    points = [(45.2, 138.55), (45.2, 151), (100, 151), (100, 182), (400, 182), (400, yp), (xp, yp)]
+    addition=c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    addition1.connect(port='o1', other=addition.ports['o1'])
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp-10),layer=(7,0)))
+
+    c.add_ref(gf.components.straight(length=40, width=26, layer=(2, 0))).dmovex(48).dmovey(130)
+    c.add_ref(gf.components.straight(length=40, width=26, layer=(2, 0))).dmovex(48).dmovey(94)
+
+    label_text = "G"
+    xp += 170
+    yp-=70
+    points = [(53, 144), (49, 144), (49, 148), (122, 148), (122, 178),(900, 178),(900, yp), (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp+60, yp-10), layer=(7, 0)))
+
+    label_text = "H"
+    xp=275
+    yp=110
+    points = [(70, 130), (140, 130), (140, 117.4), (190, 117.4), (190, 108.4), (230, 108.4), (230, 118.8), (260, 118.8), (260, yp), (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
+
+    points = [(50, 130), (45.2, 130), (45.2,133.5)]
+    p1=c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+    points = [(45.2, 130), (45.2, 126.45)]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+
+    label_text = "I"
+    xp += 170
+    yp-=70
+    points = [(53, 115.9), (49, 115.9), (49, 112), (125, 112), (125, 98), (190, 98), (190, 89), (230, 89), (230, 80), (271, 80), (271, yp), (xp,
+                                                                                                                                                 yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
+    points = [(53, 108), (49, 108), (49, 112)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=(2, 0)))
+
+    points = [(50, 112), (45.2, 112), (45.2, 121.45)]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+    points = [ (45.2, 112), (44.62, 112), (44.62, 102.54) ]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+
+    label_text = "J"
+    xp += 170
+    yp -= 70
+    points = [(70, 90), (140, 90), (140, 78.6), (190, 78.6), (190, 69.6), (230, 69.6), (230, 60.6), (260, 60.6), (260, 30), (430, 30), (430, yp),
+              (xp, yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
+
+    points = [(50, 94), (44.62, 94), (44.64, 97.54)]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+    points = [(44.62, 94), (44.62, 90.45)]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o2'])
+
+    label_text = "K"
+    xp += 170
+    yp -= 70
+    points = [(53, 80), (49, 80), (49, 75), (120, 75), (120, 59.2), (195, 59.2), (195, 30.8), (230, 30.8), (230, 21.8), (410,21.8), (410, yp), (xp,
+                                                                                                                                               yp)]
+    c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=(2, 0)))
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
+
+    label_text = "L"
+    xp += 170
+    yp -= 70
+    points = [(44.62, 85.45), (44.62, 70), (115, 70), (115, 39.8), (175, 39.8), (175, 11.4), (230, 11.4), (230, 2.4), (260, 2.4), (260, -110), (260,
+                                                                                                                                                yp),
+              (xp, yp)]
+    p1 = c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=(2, 0)))
+    t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=(2, 0)))
+    t1.connect(port='o1', other=p1.ports['o1'])
+    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=(2, 0))).move((xp, yp))
+    c.add_ref(gf.components.text(text=label_text, size=40, position=(xp + 60, yp - 10), layer=(7, 0)))
+
+
+
+
+
+
+    return c
 
 
 def run_electrodes_mode(coupon_gds_path, base_directory, today_date):
@@ -2273,12 +2356,13 @@ def main():
     clearance_width = 50
     to_debug = False
     today_date = datetime.now().strftime("%d-%m-%y")
-    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
+    base_directory = r"C:\PyLayout\PyLayout"
+    # base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
 
     # Mode selection: coupon (default), labels, or electrodes
-    mode = "coupon"
+    # mode = "coupon"
     # mode = "labels"
-    # mode = "electrodes"
+    mode = "electrodes"
 
     # coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_comb_run_coupon_mode.oas"
     coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3_Ct_vertical_run_coupon_mode.oas"
