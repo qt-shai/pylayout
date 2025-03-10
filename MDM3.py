@@ -10,145 +10,6 @@ from kfactory.kf_types import layer
 from shapely.ops import orient
 
 
-# # ------------------------------------------
-# # KLayout Macro: Save Layout as High-Res PNG
-# # ------------------------------------------
-#
-# app = RBA::Application.instance
-# mw  = app.main_window
-# cv  = mw.current_view
-#
-# if cv.nil?
-#   mw.message("No layout is currently open.")
-# else
-#   # 1. Zoom to fit the entire layout in the view
-#   cv.zoom_fit
-#
-#   # 2. Define the output file name (change the path if needed)
-#   file_name = "C:\Users\shai\Documents\layout_export.png"
-#
-#   # 3. Define the desired resolution by specifying image dimensions in pixels
-#   width_px  = 15000   # adjust as needed for higher/lower resolution
-#   height_px = 15000   # adjust as needed for higher/lower resolution
-#
-#   # 4. Save the image using the 3-argument version of save_image
-#   success = cv.save_image(file_name, width_px, height_px)
-#
-#   # 5. Provide feedback
-#   if success
-#     mw.message("✅ Layout saved to '#{file_name}' (#{width_px} x #{height_px} pixels).")
-#   else
-#     mw.message("❌ Failed to save layout image.")
-#   end
-# end
-
-
-# # DRC Script to Merge All Shapes in Layer (1, 0)
-#
-# # Load the layer with indices (1, 0)
-# l1 = input(1, 0)
-#
-# # Merge overlapping or adjacent shapes
-# merged_l1 = l1.merged
-#
-# # Output the merged shapes back to the same layer
-# merged_l1.output(1, 0)
-
-
-
-# # DRC Script to Rotate All Shapes in Layer (1, 0) by 90 Degrees
-#
-# # Load the specific layer (1, 0)
-# original_layer = input(1, 0)
-#
-# # Define a 90-degree rotation transformation
-# rotation = RBA::ICplxTrans::new(1.0, 90, false, 0, 0)
-#
-# # Apply the transformation to all shapes in the layer
-# rotated_layer = original_layer.transformed(rotation)
-#
-# # Output the transformed shapes to the original layer
-# rotated_layer.output(1, 0)
-
-
-# Python file to save current gds to cif text file
-#
-# import pya
-#
-#
-# def save_current_layout_as_cif(filename=r"C:\Users\shai\Documents\my_layout.cif"):
-#     main_window = pya.MainWindow.instance()
-#     view = main_window.current_view()
-#     if view is None:
-#         raise RuntimeError("No layout view is open.")
-#
-#     cell_view = view.active_cellview()
-#     layout = cell_view.layout()
-#     if layout is None:
-#         raise RuntimeError("No layout associated with the active cell view.")
-#
-#     opts = pya.SaveLayoutOptions()
-#     # Use CIF as the export format (which is textual)
-#     opts.format = "CIF"
-#
-#     layout.write(filename, opts)
-#     print(f"Layout saved to CIF: {filename}")
-#
-#
-# # Example usage:
-# save_current_layout_as_cif()
-
-
-# Python to save and copy to clipboard
-#
-# import pya
-# import os
-#
-# def save_current_layout_as_cif_and_copy(filename=r"C:\Users\shai\Documents\my_layout.cif"):
-#     """
-#     Saves the currently open layout to a CIF (text) file and
-#     copies the entire CIF content to the Windows clipboard using 'clip'.
-#     """
-#     main_window = pya.MainWindow.instance()
-#     view = main_window.current_view()
-#     if view is None:
-#         raise RuntimeError("No layout view is open.")
-#
-#     cell_view = view.active_cellview()
-#
-#     layout = cell_view.layout()
-#     if layout is None:
-#         raise RuntimeError("No layout associated with the active cell view.")
-#
-#     # Prepare the SaveLayoutOptions for CIF
-#     opts = pya.SaveLayoutOptions()
-#     opts.format = "CIF"
-#
-#     # Write the layout to the specified file in CIF format
-#     layout.write(filename, opts)
-#     print(f"Layout successfully saved in CIF format to: {filename}")
-#
-#     # Read the CIF file back as text
-#     with open(filename, "r", encoding="utf-8", errors="replace") as f:
-#         cif_data = f.read()
-#
-#     # Copy the CIF text to the Windows clipboard using 'clip'
-#     copy_text_to_clipboard_windows(cif_data)
-#     print("All CIF text has been copied to the clipboard (Windows).")
-#
-#
-# def copy_text_to_clipboard_windows(text):
-#     """
-#     Uses the Windows 'clip' command to put 'text' onto the system clipboard.
-#     """
-#     with os.popen('clip', 'w') as pipe:
-#         pipe.write(text)
-#
-#
-# # Example usage:
-# save_current_layout_as_cif_and_copy()
-
-
 def merge_references(base, refs, layer):
     """Boolean OR of a base geometry with a list of references, handling nested lists."""
 
@@ -775,14 +636,13 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     bounding_rect_ref = c.add_ref(bounding_rect).dmovex(25.5)
     bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50,layer=layer_main)).dmovex(-21.6-clearance_width)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=bounding_ext, operation="or", layer=layer_main)
-    pad_h = 150
-    pad_l = 150
-    ext1 = c.add_ref(gf.components.straight(length=pad_x_offset+10, width=6, layer=layer_main)).dmovex(30)
-    if pad_y_offset>0:
-        ext2 = c.add_ref(gf.components.straight(length=6, width=pad_y_offset+6, layer=layer_main)).dmovex(40+pad_x_offset).dmovey(pad_y_offset/2)
-        ext1 = gf.boolean(A=ext1, B=ext2, operation="or", layer=layer_main)
-
-    bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
+    # pad_h = 150
+    # pad_l = 150
+    # ext1 = c.add_ref(gf.components.straight(length=pad_x_offset+10, width=6, layer=layer_main)).dmovex(30)
+    # if pad_y_offset>0:
+    #     ext2 = c.add_ref(gf.components.straight(length=6, width=pad_y_offset+6, layer=layer_main)).dmovex(40+pad_x_offset).dmovey(pad_y_offset/2)
+    #     ext1 = gf.boolean(A=ext1, B=ext2, operation="or", layer=layer_main)
+    # bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=ext1, operation="or", layer=layer_main)
 
     bounding_rect_ref = c.add_ref(gf.boolean(A=bounding_rect_ref, B=combined_thick_dc, operation="or", layer=layer_main))
 
@@ -791,8 +651,8 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
 
     result_c= gf.Component()
     result_c.add_ref(dc_positive)
-    result_c.add_ref(gf.components.straight(length=pad_l, width=pad_h, layer=layers["coarse_ebl_layer"])).dmovex(30+pad_x_offset).dmovey(
-        72+pad_y_offset).flatten()
+    # result_c.add_ref(gf.components.straight(length=pad_l, width=pad_h, layer=layers["coarse_ebl_layer"])).dmovex(30+pad_x_offset).dmovey(
+    #     72+pad_y_offset).flatten()
 
     return result_c
 
@@ -1921,6 +1781,9 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
     if to_debug:
         config = {"Long_WG":False, "Resonators":False, "N_Bulls_eye": 0, "add_logo": False, "add_rectangle": False, "add_scalebar": False, }
 
+    if to_debug:
+        config = {"Long_WG":True, "Resonators":True, "N_Bulls_eye": 0, "add_logo": False, "add_rectangle": False, "add_scalebar": False, }
+
     params = {"is_resist_positive": True, "resonator_type": "fish", "length_mmi": length_mmi, "width_mmi": width_mmi, "total_width_mmi": 30,
         "taper_length_in": 20, "y_spacing": y_spacing / 2, }
 
@@ -1980,31 +1843,31 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
                                           taper_length=params["taper_length_in"],clearance=clearance_width)).flatten()
 
     ###################   DIRECTIONAL COUPLER   ###################
+    offset_y += 12
     params["resonator_type"] = "fish"
     c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
                                     coupler_l=directional_coupler_l,pad_x_offset=210,pad_y_offset=23,clearance_width=clearance_width,layers=layers
-                                        )).dmovey(offset_y+117).dmovex(21.6).flatten()
-
-    if not to_debug:
-        params["resonator_type"] = "extractor"
-        c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
-                                        coupler_l=directional_coupler_l,clearance_width=clearance_width,layers=layers)).dmovey(offset_y+140).dmovex(21.6).flatten()
-        offset_y += 19
-        c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
-                                            coupler_l=directional_coupler_l,clearance_width=clearance_width)).dmovey(offset_y).dmovex(21.6).flatten()
-        offset_y += 36
-        params["resonator_type"] = "fish"
-        c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
-                                        coupler_l=directional_coupler_l,clearance_width=clearance_width)).dmovey(offset_y).dmovex(21.6).flatten()
+                                        )).dmovey(offset_y).dmovex(21.6).flatten()
+    offset_y += 18
+    params["resonator_type"] = "extractor"
+    c.add_ref(create_dc_design_vertical(resonator=params["resonator_type"],
+                                    coupler_l=directional_coupler_l,clearance_width=clearance_width,layers=layers)).dmovey(offset_y).dmovex(21.6).flatten()
+    # offset_y += 19
+    # c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
+    #                                     coupler_l=directional_coupler_l,clearance_width=clearance_width)).dmovey(offset_y).dmovex(21.6).flatten()
+    # offset_y += 36
+    # params["resonator_type"] = "fish"
+    # c.add_ref(create_dc_design_comb(resonator=params["resonator_type"],
+    #                                 coupler_l=directional_coupler_l,clearance_width=clearance_width)).dmovey(offset_y).dmovex(21.6).flatten()
 
     if config["N_Bulls_eye"] > 0:
         add_bulls_eye(c, config["N_Bulls_eye"], 150)
 
     if config["add_logo"]:
-        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-130).flatten()
+        c.add_ref(add_logos(c)).dmovex(60).dmovey(offset_y-100).flatten()
 
     if config["add_scalebar"]:
-        add_scalebars(c, 25, offset_y-100)
+        add_scalebars(c, 25, offset_y-70)
 
     #####################    CIRCULAR TEST PATTERN    #############
     if not to_debug:
@@ -2014,7 +1877,7 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
                 operation="A-B",
                 layer=(1, 0),
             )
-        c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(45).dmovey(offset_y-80).flatten()
+        c.add_ref(unite_array(circ,3,3,(5,5),layer=(1,0))).dmovex(45).dmovey(offset_y-50).flatten()
 
         circ = gf.boolean(
             A=gf.components.circle(radius=6, layer=(1, 0)), #        B=gf.components.circle(radius=3, layer=(1, 0)),
@@ -2022,18 +1885,18 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
             operation="A-B",
             layer=(1, 0),
         )
-        c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 85).flatten()
+        c.add_ref(unite_array(circ, 3, 3, (8, 8), layer=(1, 0))).dmovex(90).dmovey(offset_y - 55).flatten()
 
     ###########################    Long WG    ######################
     if config["Long_WG"]:
         arc_radius = 35
         wg_length = 640
         offset_step = 9
-        length_step = 105
+        length_step = 150
 
         for i in range(3):
-            start_y = -40 + i * offset_step
-            end_y = 173 - i * offset_step
+            start_y = -35 + i * offset_step
+            end_y = 137 - i * offset_step
             c.add_ref(create_long_waveguide(start=(0, start_y), end=(0, end_y), length=wg_length, width=0.25, arc_radius=arc_radius,clearance_width=clearance_width)).flatten()
             wg_length -= length_step
 
@@ -2099,12 +1962,12 @@ def run_coupon_mode(base_directory, today_date, clearance_width,to_debug,layers)
     # Coupon mode: create coupon design (without electrodes).
     design_component = create_design(clearance_width=clearance_width,to_debug=to_debug,layers=layers)
     c = merge_layer(design_component, layer=layers["fine_ebl_layer"])
-    coarse_component=merge_layer(design_component, layer=layers["coarse_ebl_layer"])
-    c.add_ref(coarse_component).flatten()
+    # coarse_component=merge_layer(design_component, layer=layers["coarse_ebl_layer"])
+    # c.add_ref(coarse_component).flatten()
     if not to_debug:
-        c.add_ref(gf.components.straight(length=85, width=290,layer=layers["coarse_ebl_layer"])).dmovex(-85).dmovey(290/2-50).dmovex(
+        c.add_ref(gf.components.straight(length=85, width=200,layer=layers["coarse_ebl_layer"])).dmovex(-85).dmovey(200/2-50).dmovex(
             -clearance_width).flatten()
-        c.add_ref(gf.components.straight(length=10, width=600,layer=layers["coarse_ebl_layer"])).dmovex(-95).dmovey(600/2-50-100).dmovex(
+        c.add_ref(gf.components.straight(length=10, width=500,layer=layers["coarse_ebl_layer"])).dmovex(-95).dmovey(500/2-50-100).dmovex(
             -clearance_width).flatten()
 
          # Save GDS file
@@ -2497,18 +2360,18 @@ def main():
     }
 
     clearance_width = 5
-    to_debug = True
+    to_debug = False
 
     today_date = datetime.now().strftime("%d-%m-%y")
-    base_directory = r"C:\PyLayout\PyLayout"
-    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
+    base_directory = r"C:\PyLayout\Build"
+    # base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
 
     # Mode selection: coupon (default), labels, or electrodes
     mode = "coupon"
     # mode = "labels"
     # mode = "electrodes"
 
-    coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3C_run_coupon_mode.oas"
+    # coupon_gds_path = r"C:\PyLayout\PyLayout\build\gds\MDM3C_run_coupon_mode.oas"
 
     if mode == "coupon":
         run_coupon_mode(base_directory, today_date, clearance_width,to_debug,layers)
