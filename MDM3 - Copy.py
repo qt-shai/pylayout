@@ -1677,56 +1677,52 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
                 waveguide_with_supports.add_ref(support).drotate(180).move((support_x + support_length, support_y))  # Right
 
     # Function to add support structures along arc
-    def add_supports_along_arc(center_x, center_y, radius, start_angle,end_angle , dx,dy):
+    def add_supports_along_arc(center_x, center_y, radius, start_angle, end_angle):
         # Calculate arc length
         arc_length = np.abs(end_angle - start_angle) * np.pi * radius / 180
+        # Calculate number of supports
+        num_supports = int(round(arc_length / support_spacing, 0))
+        if num_supports == 0:
+            return
         
-        # Create support components
-        support2 = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
-
-        # Add support at the middle of the arc
-        angle = np.radians(start_angle + 45)
-        # Calculate position on arc with precise shifts
-        # For 225° (45° from 180°), we need both x and y shifts
-        support_x = center_x + radius * np.cos(angle)
-        support_y = center_y + radius * np.sin(angle) 
-        # Calculate rotation angle for the support
-        # The support should be perpendicular to the tangent of the arc
-        # For a circular arc, the tangent is perpendicular to the radius vector
-        # We subtract 90 degrees to match the horizontal support pattern
-        rotation_angle = np.degrees(angle)
+        # Create support component
+        support = gf.components.taper(length=support_length, width1=width, width2=support_width, layer=layer)
         
-        # Create bent support for this specific angle
-        bent_support1 = create_bent_taper(taper_length=0, taper_width1=support_width, taper_width2=0.2, 
-                                       bend_radius=radius*0.6, bend_angle=10, enable_sbend=False)
-        
-        # Add four supports around the point
-        # Order matches the horizontal pattern: right taper expands then contracts
-        # Adjust positions to account for support length and bend radius
-        waveguide_with_supports.add_ref(bent_support1).drotate(rotation_angle + 180).move((support_x, support_y))  # Right
-        waveguide_with_supports.add_ref(bent_support1).mirror_y().drotate(rotation_angle).move((support_x, support_y))  # Left
-        waveguide_with_supports.add_ref(support2).drotate(rotation_angle + 90).move((support_x+dx, support_y-dy))  # Up
-        waveguide_with_supports.add_ref(support2).drotate(rotation_angle + 270).move((support_x-dx, support_y+dy))  # Down
+        # Add supports along the arc
+        angle_step = (end_angle - start_angle) / (num_supports + 1)
+        for i in range(1, num_supports + 1):
+            angle = np.radians(start_angle + i * angle_step)
+            # Calculate position on arc
+            support_x = center_x + radius * np.cos(angle)
+            support_y = center_y + radius * np.sin(angle)
+            
+            # Calculate rotation angle for the support
+            rotation_angle = np.degrees(angle)
+            
+            # Add four supports around the point
+            waveguide_with_supports.add_ref(support).drotate(rotation_angle).move((support_x, support_y))
+            waveguide_with_supports.add_ref(support).drotate(rotation_angle + 180).move((support_x, support_y))
+            waveguide_with_supports.add_ref(support).drotate(rotation_angle + 90).move((support_x, support_y))
+            waveguide_with_supports.add_ref(support).drotate(rotation_angle + 270).move((support_x, support_y))
 
     # Add supports in first horizontal section
     add_supports_along_straight(start[0] -10, start[1], first_straight_length, is_vertical=False)
 
     # Add supports in first arc
-    first_arc_center_x = start[0] + first_straight_length + taper_length + arc_radius+14.67
+    first_arc_center_x = start[0] + first_straight_length + taper_length + arc_radius
     first_arc_center_y = start[1] + arc_radius
-    add_supports_along_arc(first_arc_center_x, first_arc_center_y, arc_radius, 180, 270,0.2,0.2)
-    waveguide_with_supports.show()
+    add_supports_along_arc(first_arc_center_x, first_arc_center_y, arc_radius, 180, 270)
+
     # Add supports in vertical section
     upward_section_start_x = start[0] + first_straight_length + arc_radius + taper_length
     upward_section_start_y = start[1] + arc_radius / 2 - 2
     add_supports_along_straight(upward_section_start_x, upward_section_start_y, vertical_straight_length, is_vertical=True)
 
     # Add supports in second arc
-    second_arc_center_x = start[0] + first_straight_length + taper_length + arc_radius-35.03
-    second_arc_center_y = start[1] + vertical_straight_length + arc_radius+49.7
-    add_supports_along_arc(second_arc_center_x, second_arc_center_y, arc_radius, 270, 360,0.2,-0.2)
-    # add_supports_along_arc(second_arc_center_x, second_arc_center_y, arc_radius, 315, 360)  # Add second support at 3/4 of arc
-    # waveguide_with_supports.show()
+    second_arc_center_x = start[0] + first_straight_length + taper_length + arc_radius
+    second_arc_center_y = start[1] + vertical_straight_length + arc_radius
+    add_supports_along_arc(second_arc_center_x, second_arc_center_y, arc_radius, 270, 360)
+
     # Add supports in last horizontal section
     last_section_start_x = start[0]-10
     last_section_start_y = upward_section_start_y + vertical_straight_length + arc_radius * 3 / 2 + 2
@@ -2348,7 +2344,7 @@ def main():
 
     today_date = datetime.now().strftime("%d-%m-%y")
     base_directory = r"C:\PyLayout\Build"
-    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
+    # base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
 
     # Mode selection: coupon (default), labels, or electrodes
     mode = "coupon"
