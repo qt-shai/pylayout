@@ -12,6 +12,113 @@ from kfactory.kf_types import layer
 from shapely.ops import orient
 
 
+def add_2D_phc_cavity(
+    component: gf.Component,
+    a=252e-3,  # um
+    r=65e-3,   # um
+    nx=15,
+    ny=5,
+    shifts=[10.1e-3, 7.575e-3, 5.05e-3, 2.525e-3],
+    x_offset=-15,
+    y_offset=5,
+    layer=(1, 0),
+):
+    """Adds a 2D photonic crystal with a line-defect cavity to a given component."""
+    for i in range(-nx, nx + 1):
+        for j in range(-ny, ny + 1):
+            x = i * a
+            y = j * a * (3**0.5) / 2
+
+            if j == 0:
+                continue
+
+            shift = 0
+            abs_i = abs(i)
+            if abs_i in [1, 2, 3, 4]:
+                shift = shifts[abs_i - 1] * (1 if i > 0 else -1)
+                x += shift
+
+            hole = gf.components.circle(radius=r, layer=layer)
+            hole_ref = component.add_ref(hole)
+            hole_ref.move((x + x_offset, y + y_offset))
+
+
+def create_photonic_crystal_chip() -> gf.Component:
+    """Creates the full device with 1D nanobeam and 2D PhC cavity."""
+    layer = (1, 0)
+    c = gf.Component("phc_chip")
+
+    # === 1D Nanobeam PhC ===
+    a = 255
+    r = 65
+    w = 370
+    taper_factors = [0.84, 0.844, 0.858, 0.88, 0.911, 0.951]
+    mirror_N = 10
+    taper_length = 20.0
+    taper_width = 500
+    support_width = 100
+
+    a_list = [a] * mirror_N + [a * f for f in taper_factors[::-1] + taper_factors] + [a] * mirror_N
+    a_list_um = [ai * 1e-3 for ai in a_list]
+    beam_length = sum(a_list_um)
+    r_um = r * 1e-3
+    w_um = w * 1e-3
+    taper_width_um = taper_width * 1e-3
+    support_width_um = support_width * 1e-3
+
+    beam = gf.components.straight(length=beam_length, width=w_um, layer=layer)
+    holes = gf.Component()
+    x = 0
+    for ai in a_list_um:
+        hole = gf.components.circle(radius=r_um, layer=layer)
+        hole_ref = holes.add_ref(hole)
+        hole_ref.move((x + ai / 2, 0))
+        x += ai
+
+    beam_final = gf.boolean(A=beam, B=holes, operation="A-B", layer=layer)
+    beam_ref = c.add_ref(beam_final)
+
+    # Left taper
+    taper_left = c.add_ref(gf.components.taper(length=10, width1=taper_width_um, width2=w_um, layer=layer))
+    taper_left.connect("o2", other=beam.ports["o2"], allow_width_mismatch=True)
+
+    # Right taper
+    taper_right = c.add_ref(gf.components.taper(length=20, width1=taper_width_um, width2=0.02, layer=layer))
+    taper_right.connect("o1", other=taper_left.ports["o1"], allow_width_mismatch=True)
+
+    # Support structure
+    support = gf.components.straight(width=support_width_um, length=2, layer=layer)
+    support1 = c.add_ref(support).rotate(90)
+    support1.move((taper_left.xmax, -1))
+
+    support_taper_down = c.add_ref(gf.components.taper(length=0.5, width1=support_width_um, width2=0.5, layer=layer))
+    support_taper_down.connect("o1", other=support1.ports["o1"], allow_width_mismatch=True)
+
+    support_taper_up = c.add_ref(gf.components.taper(length=0.5, width1=support_width_um, width2=0.5, layer=layer))
+    support_taper_up.connect("o1", other=support1.ports["o2"], allow_width_mismatch=True)
+
+    bbox1d = gf.components.straight(length=45-2.2, width=3)
+    final1d = gf.boolean(A=bbox1d, B=c, operation="A-B")
+
+    # === 2D PhC ===
+    phc2d = gf.Component("phc2d")
+    add_2D_phc_cavity(phc2d, layer=layer)
+
+    # Create and subtract bounding box
+    phc_bbox = gf.components.rectangle(size=(8, 3), layer=layer)
+    phc_bbox_ref = gf.Component("phc2d_bbox")
+    phc_bbox_ref.add_ref(phc_bbox).move((-19, 3.5))
+
+    phc2d_final = gf.boolean(A=phc_bbox_ref, B=phc2d, operation="A-B", layer=layer)
+
+    chip = gf.Component("full_chip")
+    chip.add_ref(final1d)
+    chip.add_ref(gf.components.straight(length=5, width=8, layer=layer)).dmovex(40-2.2)
+    chip.add_ref(phc2d_final)
+
+    return chip
+
+
 def merge_references(base, refs, layer):
     """Boolean OR of a base geometry with a list of references, handling nested lists."""
 
@@ -79,18 +186,18 @@ def create_vertical_supports(c, layer, cnt1, cnt2,dy):
     taper_large = gf.components.taper(length=s3_len+6, width1=4, width2=0.2, layer=layer)
 
     # Tapers around first waveguide center
-    ts1_ref = c.add_ref(taper_small).drotate(90)
-    ts1_ref.dmove((cnt1[0], cnt1[1] - s3_len - 1.75))
-    refs.append(ts1_ref)
+    # ts1_ref = c.add_ref(taper_small).drotate(90)
+    # ts1_ref.dmove((cnt1[0], cnt1[1] - s3_len - 1.75))
+    # refs.append(ts1_ref)
 
     ts2_ref = c.add_ref(taper_large).drotate(270)
     ts2_ref.dmove((cnt1[0], cnt1[1] + s3_len + 6.25))
     refs.append(ts2_ref)
 
     # Tapers around second waveguide center
-    ts3_ref = c.add_ref(taper_small).drotate(90)
-    ts3_ref.dmove((cnt2[0], cnt1[1] - s3_len - 1.75))
-    refs.append(ts3_ref)
+    # ts3_ref = c.add_ref(taper_small).drotate(90)
+    # ts3_ref.dmove((cnt2[0], cnt1[1] - s3_len - 1.75))
+    # refs.append(ts3_ref)
 
     ts4_ref = c.add_ref(taper_large).drotate(270)
     ts4_ref.dmove((cnt2[0], cnt2[1] + s3_len + 6.25))
@@ -302,7 +409,22 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
 
     bounding_rect_ref = c.add_ref(gf.boolean(A=bounding_rect_ref, B=combined_thick_dc, operation="or", layer=layer_main))
 
-    dc_positive = gf.boolean(A=bounding_rect_ref, B=combined_dc, operation="A-B", layer=layer_main)
+    dc_mels_component = gf.Component()
+    # Add each one inside
+    dc_mels_component.add_ref(gf.components.taper(length=8, width1=2, width2=11)).dmovex(10)
+    dc_mels_component.add_ref(gf.components.straight(length=8, width=10, layer=(1, 0))).dmovex(18)
+    dc_mels_component.add_ref(gf.components.taper(length=8, width1=2, width2=11)).dmovex(-3).mirror_x()
+    dc_mels_component.add_ref(gf.components.straight(length=20, width=10, layer=(1, 0))).dmovex(-22)
+
+    # Now you can boolean
+    bounding_plus_mels = gf.boolean(
+        A=bounding_rect_ref,
+        B=dc_mels_component,
+        operation="or",
+        layer=layer_main,
+    )
+
+    dc_positive = gf.boolean(A=bounding_plus_mels, B=combined_dc, operation="A-B", layer=layer_main)
 
 
     result_c= gf.Component()
@@ -1250,6 +1372,8 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
         width_mmi, "total_width_mmi": 30,
         "taper_length_in": 20, "y_spacing": y_spacing / 2, }
 
+    c.add_ref(create_photonic_crystal_chip()).mirror_x().dmovey(-15).dmovex(40-2.2)
+
 
     if config["Resonators"]:
         c.add_ref(create_resonator_or_smw(component_type=params["resonator_type"], y_spacing=offset_y,
@@ -1592,7 +1716,7 @@ def main():
 
     today_date = datetime.now().strftime("%d-%m-%y")
     base_directory = r"C:\PyLayout\Build"
-    # base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
+    base_directory = r"Q:\QT-Nano_Fabrication\6 - Project Workplan & Layouts\GDS_Layouts\Shai GDS Layout\MDM"
 
     output_dir = os.path.join(base_directory, today_date)
     os.makedirs(output_dir, exist_ok=True)

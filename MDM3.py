@@ -474,7 +474,7 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     refs=[]
 
     # --- Load fish or alternative resonator geometry ---
-    gds_path = Path("QT14_v1.gds") if resonator == "fish" else Path("QT10.gds")
+    gds_path = Path("Selected Resonators to FAB\QT14_v1.gds") if resonator == "fish" else Path("Selected Resonators to FAB\QT10.gds")
     fish_component = gf.import_gds(gds_path)
     fish_component.add_port(
         name="o1", center=(0, 0), width=0.5, orientation=180, layer=layer_main
@@ -1528,9 +1528,9 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
         # Add fish components and connect them to the second short tapers
         if dil == 0:
-            fish_refs = add_fish_components(component, 'QT10.gds', 20, 10, 5)
+            fish_refs = add_fish_components(component, 'Selected Resonators to FAB\QT10.gds', 20, 10, 5)
         else:
-            fish_refs = add_fish_components(component, f'QT10_dil{dil}.gds', 20, 10, 5)
+            fish_refs = add_fish_components(component, f'Selected Resonators to FAB\QT10_dil{dil}.gds', 20, 10, 5)
 
         fish_refs[0].connect(port="o1", other=tpr1.ports["o2"], allow_width_mismatch=True)
         fish_refs[1].connect(port="o1", other=tpr2.ports["o2"], allow_width_mismatch=True)
@@ -1546,9 +1546,9 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
         # Add fish components and connect them to the second short tapers
         if dil == 0:
-            fish_refs = add_fish_components(component, 'QT14.gds', 20, 10, 5)
+            fish_refs = add_fish_components(component, 'Selected Resonators to FAB\QT14.gds', 20, 10, 5)
         else:
-            fish_refs = add_fish_components(component, f'QT14_dil{dil}.gds', 20, 10, 5)
+            fish_refs = add_fish_components(component, f'Selected Resonators to FAB\QT14_dil{dil}.gds', 20, 10, 5)
 
 
         fish_refs[0].connect(port="o1", other=tpr1.ports["o2"], allow_width_mismatch=True)
