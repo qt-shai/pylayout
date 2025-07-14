@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>drc</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>true</show-in-menu>
+ <group-name>drc_scripts</group-name>
+ <menu-path>tools_menu.drc.end</menu-path>
+ <interpreter>dsl</interpreter>
+ <dsl-interpreter-name>drc-dsl-xml</dsl-interpreter-name>
+ <text># DRC Script to Merge All Shapes in Layer (1, 0)
+
+# Load the layer with indices (1, 0)
+l1 = input(1, 0)
+
+# Merge overlapping or adjacent shapes
+merged_l1 = l1.merged
+
+# Output the merged shapes back to the same layer
+merged_l1.output(1, 0)
+</text>
+</klayout-macro>

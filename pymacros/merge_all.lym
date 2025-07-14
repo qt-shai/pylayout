@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text>import pya
+
+# Get the current application and main window
+app = pya.Application.instance()
+mw = app.main_window()
+cv = mw.current_view()
+
+if cv is None:
+    mw.message("No layout is currently open.")
+else:
+    # Get the active cellview and layout
+    cellview = cv.active_cellview()
+    layout = cellview.layout()
+
+    if layout is None:
+        mw.message("No layout found.")
+    else:
+        # Get the top cell (adjust if you need to work with hierarchy)
+        top_cell = layout.top_cell()
+        if top_cell is None:
+            mw.message("No top cell found in the layout.")
+        else:
+            # Begin modifications using the available method
+            
+
+            # Loop over each layer in the layout
+            for layer in layout.layer_indices():
+                shapes = top_cell.shapes(layer)
+                polygons = []
+
+                # Collect polygons from each shape in the current layer
+                for shape in shapes.each():
+                    if shape.is_polygon():
+                        polygons.append(shape.polygon())
+                    elif shape.is_box():
+                        # Convert box to polygon
+                        polygons.append(pya.Polygon.from_box(shape.box()))
+                    elif shape.is_path():
+                        # Convert path to polygon; note that conversion might depend on path parameters
+                        polygons.append(shape.path().polygon())
+
+                # Merge the polygons if any were collected
+                if polygons:
+                    merged_polygons = pya.Polygon.merge(polygons)
+                    shapes.clear()  # Remove original shapes
+                    for poly in merged_polygons:
+                        shapes.insert(poly)
+
+            # End modifications using the appropriate method
+            if using_changes:
+                layout.end_changes()
+            else:
+                layout.commit_edit()
+
+            mw.message("Merging completed!")
+</text>
+</klayout-macro>

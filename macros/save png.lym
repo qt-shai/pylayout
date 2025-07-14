@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category/>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>false</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>ruby</interpreter>
+ <dsl-interpreter-name/>
+ <text># ------------------------------------------
+# KLayout Macro: Save Layout as High-Res PNG
+# ------------------------------------------
+
+app = RBA::Application.instance
+mw  = app.main_window
+cv  = mw.current_view
+
+if cv.nil?
+  mw.message("No layout is currently open.")
+else
+  # 1. Zoom to fit the entire layout in the view
+  cv.zoom_fit
+
+  # 2. Define the output file name (change the path if needed)
+  file_name = "C:\Users\shai\Documents\layout_export.png"
+
+  # 3. Define the desired resolution by specifying image dimensions in pixels
+  width_px  = 15000   # adjust as needed for higher/lower resolution
+  height_px = 15000   # adjust as needed for higher/lower resolution
+
+  # 4. Save the image using the 3-argument version of save_image
+  success = cv.save_image(file_name, width_px, height_px)
+
+  # 5. Provide feedback
+  if success
+    mw.message("✅ Layout saved to '#{file_name}' (#{width_px} x #{height_px} pixels).")
+  else
+    mw.message("❌ Failed to save layout image.")
+  end
+end
+</text>
+</klayout-macro>
