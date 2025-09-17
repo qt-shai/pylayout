@@ -8,33 +8,46 @@ from pathlib import Path
 from datetime import datetime
 import os
 
-from kfactory.kf_types import layer
+# from kfactory.kf_types import layer
 from shapely.ops import orient
 
-
 def merge_references(base, refs, layer):
-    """Boolean OR of a base geometry with a list of references, handling nested lists."""
+    """Boolean OR of `base` with each item in `refs`, flattening any nesting.
+    Never passes a list into gf.boolean (prevents .is_regular_array errors)."""
+
+    Comp = getattr(gf, "Component", None)
+    RefTypes = tuple(t for t in (
+        getattr(gf, "ComponentReference", None),
+        getattr(gf, "Reference", None),
+        getattr(gf, "Instance", None),   # some gf versions expose this
+    ) if t is not None)
+
+    def _iter_flat(items):
+        if items is None:
+            return
+        if isinstance(items, (list, tuple, set)):
+            for it in items:
+                yield from _iter_flat(it)
+        else:
+            yield items
+
+    # Validate base
+    if not (isinstance(base, Comp) or isinstance(base, RefTypes)):
+        raise TypeError(f"merge_references: `base` must be a Component or Reference, got {type(base)}")
 
     merged = base
-    flattened_refs = []
-
-    # Flatten nested lists
-    def flatten(ref_list):
-        for ref in ref_list:
-            if isinstance(ref, list):  # If it's a list, flatten it recursively
-                flatten(ref)
-            elif isinstance(ref, (gf.Component, gf.Instance)):  # Only keep valid Components
-                flattened_refs.append(ref)
-            else:
-                print(f"❌ Warning: Ignoring invalid reference of type {type(ref)}")
-
-    flatten(refs)  # Flatten input list
-
-    # Perform boolean OR operation on all valid references
-    for ref in flattened_refs:
-        merged = gf.boolean(A=merged, B=ref, operation="or", layer=layer)
+    for obj in _iter_flat(refs):
+        # Only merge valid geometry carriers
+        if isinstance(obj, Comp) or isinstance(obj, RefTypes):
+            # Pairwise OR; A is always a single Component (or ref), never a list
+            merged = gf.boolean(A=merged, B=obj, operation="or", layer=layer)
+        else:
+            # Ignore junk quietly; uncomment to debug:
+            # print(f"⚠️ Skipping {type(obj)}")
+            pass
 
     return merged
+
 
 
 def create_spring_vertical(c, cross_section, comb_spine):
@@ -180,7 +193,7 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     sbend_ref.connect(port="in", other=taper1_mirror.ports["o1"], allow_width_mismatch=True)
     refs.append(sbend_ref)
 
-    coupler_ref = c.add_ref(gf.components.straight(length=coupler_l,width=wg_width,layer=layer_main))
+    coupler_ref = c.add_ref(gf.components.straight(length=coupler_l,width=wg_width))
     coupler_ref.connect(port="o1", other=sbend_ref.ports["out"], allow_width_mismatch=True)
     refs.append(coupler_ref)
 
@@ -198,7 +211,7 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     refs.append(fish_ref)
 
     # --- Spine component ---
-    comb_spine = c.add_ref(gf.components.straight(length=3, width=0.972 if resonator=="fish" else 0.55, layer=layer_main))
+    comb_spine = c.add_ref(gf.components.straight(length=3, width=0.972 if resonator=="fish" else 0.55))
     comb_spine.connect(port="o1", other=fish_ref.ports["o2"], allow_width_mismatch=True)
     refs.append(comb_spine)
     # if resonator == "extractor":
@@ -216,10 +229,10 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
     refs.append(spring_refs)
 
     # --- Vertical supports ---
-    cnt1_x = taper1_ref.ports["o2"].center[0] / 1000
-    cnt1_y = taper1_ref.ports["o2"].center[1] / 1000
-    cnt2_x = taper1_ref_2.ports["o2"].center[0] / 1000+1.3
-    cnt2_y = taper1_ref.ports["o2"].center[1] / 1000
+    cnt1_x = taper1_ref.ports["o2"].center[0]
+    cnt1_y = taper1_ref.ports["o2"].center[1]
+    cnt2_x = taper1_ref_2.ports["o2"].center[0] +1.3
+    cnt2_y = taper1_ref.ports["o2"].center[1]
 
     vertical_supports = create_vertical_supports(c=c,layer=layer_main,cnt1=(cnt1_x, cnt1_y),cnt2=(cnt2_x, cnt2_y),dy=dy)
     refs.append(vertical_supports)
@@ -286,11 +299,11 @@ def create_dc_design_vertical(resonator="fish",coupler_l=0.42,clearance_width=50
 
     # --- Subtract combined waveguide from a large rectangle to get final geometry ---
     if resonator == "fish":
-        bounding_rect = gf.components.straight(length=7.3,width=dy * 2.5 + 0.6,layer=layer_main)
+        bounding_rect = gf.components.straight(length=7.3,width=dy * 2.5 + 0.6)
     else:
-        bounding_rect = gf.components.straight(length=5.9, width=dy * 2.5 + 0.6, layer=layer_main)
+        bounding_rect = gf.components.straight(length=5.9, width=dy * 2.5 + 0.6)
     bounding_rect_ref = c.add_ref(bounding_rect).dmovex(25.5)
-    bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50,layer=layer_main)).dmovex(-21.6-clearance_width)
+    bounding_ext = c.add_ref(gf.components.straight(length=clearance_width,width=50)).dmovex(-21.6-clearance_width)
     bounding_rect_ref = gf.boolean(A=bounding_rect_ref, B=bounding_ext, operation="or", layer=layer_main)
     # pad_h = 150
     # pad_l = 150
@@ -553,7 +566,8 @@ def add_fish_components( c, gds_file, length_mmi, taper_length, taper_separation
         list: A list of references to the added fish components.
     """
     # Import the fish component from the GDS file
-    fish_component = gf.import_gds(Path(gds_file))
+    fish_raw = gf.import_gds(Path(gds_file))
+    fish_component = gf.boolean(A=fish_raw,B=fish_raw, operation="or", layer=(1, 0))
 
     # Add ports to the imported fish component
     fish_component.add_port(
@@ -876,7 +890,7 @@ def logo( name=None):
     PT = c.add_ref(gf.path.extrude(
         gf.Path([(0.0000, 4.0000), (0.0000, 2.5000), (-1.4000, 1.1000), (-1.4000, -1.1000), (0.0000, -2.5000), (0.0000, -4.0000)]), layer=(1, 0),
         width=0.3))
-    ToCut = c.add_ref(gf.components.straight(length=1, layer=(1, 0), width=0.3)).drotate(90).dmovex(-1.1).dmovey(0)
+    ToCut = c.add_ref(gf.components.straight(length=1, width=0.3)).drotate(90).dmovex(-1.1).dmovey(0)
     x = gf.CrossSection(sections=[gf.Section(width=0.3, layer=(1, 0), port_names=("in", "out"))])
     sbend1 = c.add_ref(gf.components.bend_s(size=(1.15, .5), cross_section=x)).dmovex(-4.5).dmovey(-0.2)
     sbend2 = c.add_ref(gf.components.bend_s(size=(1.15, -.5), cross_section=x))
@@ -895,7 +909,7 @@ def logo( name=None):
     mrg1 = gf.boolean(A=center_logo, B=right_bottom_shape, operation="or", layer=(1, 0))
     qt_logo = gf.boolean(A=mrg1, B=Small_CR, operation="or", layer=(1, 0))
 
-    s1 = gf.Component().add_ref(gf.components.straight(length=0.3, width=1.5, layer=(1, 0))).dmovex(2.85).dmovey(-5)
+    s1 = gf.Component().add_ref(gf.components.straight(length=0.3, width=1.5)).dmovex(2.85).dmovey(-5)
     qt_logo = gf.boolean(A=qt_logo, B=s1, operation="A-B", layer=(1, 0))
 
     if not name==None:
@@ -998,10 +1012,10 @@ def add_scalebar( component, size=100, position=(0, 0), font_size=15):
 def create_bbox_component( length_mmi, total_width_mmi,taper_length=10,clearance_width=40):
     bbox_component = gf.Component()
     bbox_component.add_ref(
-        gf.components.straight(length=length_mmi + 38.3, width=total_width_mmi, layer=(1, 0))
+        gf.components.straight(length=length_mmi + 38.3, width=total_width_mmi)
     ).dmovex(-13)
 
-    bbox_component.add_ref(gf.components.straight(length=clearance_width, width=40, layer=(1, 0))).dmovex(-clearance_width-taper_length+10)
+    bbox_component.add_ref(gf.components.straight(length=clearance_width, width=40)).dmovex(-clearance_width-taper_length+10)
 
     return bbox_component
 
@@ -1093,7 +1107,7 @@ def add_mmi_patterns_fiber( c, bbox_component, is_resist_positive, resonator_typ
 
 def add_bulls_eye( c, n_bulls_eye, offset_x):
     a = gf.components.circle(radius=5.8, layer=(1, 0))
-    s1 = gf.Component().add_ref(gf.components.straight(length=0.2, width=20, layer=(1, 0))).dmovex(-0.1)
+    s1 = gf.Component().add_ref(gf.components.straight(length=0.2, width=20)).dmovex(-0.1)
     a = gf.boolean(A=a, B=s1, operation="A-B", layer=(1, 0))
 
     gds_file = Path('Bulls_Eye_Layout_v1.1.gds')
@@ -1198,9 +1212,11 @@ def create_resonator_or_smw(component_type: str, taper_length: float = 10, taper
 
     # Create bounding box
 
-    bbox = component.add_ref(
-        gf.components.straight(length=fish_refs[1].ports['o2'].center[0]/1000-0.01, width=5)
-    ).dmovey(y_spacing - 1.5)
+    # bbox = component.add_ref(
+    #     gf.components.straight(length=fish_refs[1].ports['o2'].center[0]/1000-0.01, width=5)
+    # ).dmovey(y_spacing - 1.5)
+
+    bbox = component.add_ref(gf.components.straight(length=fish_refs[1].ports['o2'].center[0]-0.02, width=5)).dmovey(y_spacing - 1.5)
 
     bbox=gf.boolean(A=component.add_ref(gf.components.straight(length=clearance, width=10)).dmovey(y_spacing - 1.5).dmovex(-clearance),B=bbox,operation="or",layer=layer)
 
@@ -1379,9 +1395,9 @@ def create_long_waveguide(start: tuple, end: tuple, length: float, width: float 
     wider_waveguide_ref.move((start[0]-clearance_width, start[1]))
 
     clearance_rect = gf.Component().add_ref(gf.components.straight(length=clearance_width,width=20)).move((start[0]-clearance_width, start[1]))
-    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref, B=clearance_rect, operation='or')
+    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref, B=clearance_rect, operation='or', layer=layer)
     clearance_rect = gf.Component().add_ref(gf.components.straight(length=clearance_width, width=20)).move((start[0] - clearance_width, end[1]))
-    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref,B=clearance_rect,operation='or')
+    wider_waveguide_ref = gf.boolean(A=wider_waveguide_ref,B=clearance_rect,operation='or', layer=layer)
 
     # Subtract the entire waveguide (with tapers and supports) from the wider waveguide
     cutout_component = gf.boolean(A=wider_waveguide_ref, B=waveguide_with_supports, operation="A-B", layer=layer)
@@ -1563,7 +1579,7 @@ def create_design(clearance_width=50,to_debug=False,layers=None):
 
         circ = gf.boolean(
             A=gf.components.circle(radius=6, layer=(1, 0)), #        B=gf.components.circle(radius=3, layer=(1, 0)),
-            B=gf.components.straight(length=2,width=3,layer=(1,0)),
+            B=gf.components.straight(length=2,width=3),
             operation="A-B",
             layer=(1, 0),
         )
@@ -1647,9 +1663,9 @@ def run_coupon_mode(base_directory, today_date, clearance_width,to_debug,layers)
     # coarse_component=merge_layer(design_component, layer=layers["coarse_ebl_layer"])
     # c.add_ref(coarse_component).flatten()
     if not to_debug:
-        c.add_ref(gf.components.straight(length=85, width=357,layer=layers["coarse_ebl_layer"])).dmovex(-85).dmovey(357/2-45).dmovex(
+        c.add_ref(gf.components.straight(length=85, width=357)).dmovex(-85).dmovey(357/2-45).dmovex(
             -clearance_width).flatten()
-        c.add_ref(gf.components.straight(length=10, width=500,layer=layers["coarse_ebl_layer"])).dmovex(-95).dmovey(500/2-125).dmovex(
+        c.add_ref(gf.components.straight(length=10, width=500)).dmovex(-95).dmovey(500/2-125).dmovex(
             -clearance_width).flatten()
 
          # Save GDS file
@@ -1687,7 +1703,7 @@ def run_labels_mode(base_directory, today_date,layers=None):
         if include_ti:
             label_component.add_ref(gf.components.text(text="Ti", size=80, layer=layers["dose_label_layer"])).move((1400, 1300)).flatten()
 
-        label_component.add_ref(gf.components.straight(length=250, width=150, layer=layers["dose_label_layer"])).move((1375, 1000)).flatten() #SQUARE
+        label_component.add_ref(gf.components.straight(length=250, width=150)).move((1375, 1000)).flatten() #SQUARE
         if not horizontal:
             pass # here delete the first dose label
 
@@ -1698,13 +1714,13 @@ def run_labels_mode(base_directory, today_date,layers=None):
             if horizontal:
                 text = label_component.add_ref(gf.components.text(text=str(dose_label), size=size, layer=layers["dose_label_layer"])).dmovex(
                     40).dmovey(50 if add_or_sub else 0)
-                device = label_component.add_ref(gf.components.straight(length=coupon_height, width=coupon_width, layer=layers["fine_ebl_layer"]))
+                device = label_component.add_ref(gf.components.straight(length=coupon_height, width=coupon_width))
                 text.move((position[0] + i * spacing, position[1])).flatten()
                 device.move((position[0] + i * spacing - 80, position[1] + (313.5 if add_or_sub else -210))).flatten()
             else:
                 text = label_component.add_ref(gf.components.text(text=str(dose_label), size=size, layer=layers["dose_label_layer"])).dmovex(
                     (70 if add_or_sub else 10)).dmovey(50)
-                device = label_component.add_ref(gf.components.straight(length=coupon_width, width=coupon_height, layer=layers["fine_ebl_layer"]))
+                device = label_component.add_ref(gf.components.straight(length=coupon_width, width=coupon_height))
                 text.move((position[0], position[1] - i * spacing)).flatten()
                 device.move((position[0] + (215 if add_or_sub else -380), position[1] - i * spacing + 81.5)).flatten()
         return label_component
@@ -1803,7 +1819,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
     label_text = "B"
     xp=64
     yp=288
-    c.add_ref(gf.components.straight(length=145, width=145, layer=e_layer)).dmovex(xp).dmovey(yp)
+    c.add_ref(gf.components.straight(length=145, width=145)).dmovex(xp).dmovey(yp)
     points = [(50, 221), (50, 215), (68, 215)]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
     points = [(50, 208.9), (50, 215)]
@@ -1813,7 +1829,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
 
     label_text = "D"
     xp+=pad_x_spacing
-    c.add_ref(gf.components.straight(length=145, width=145, layer=e_layer)).dmovex(xp).dmovey(yp)
+    c.add_ref(gf.components.straight(length=145, width=145)).dmovex(xp).dmovey(yp)
     points = [(50, 198), (50, 192), (274.8, 192), (274.8, 230)]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
     points = [(50, 185.9), (50, 192)]
@@ -1826,7 +1842,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
     yp+=pad_y_spacing
     points = [(47.5, 221), (58, 221), (58, yp+50), (xp, yp+50)]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp+label_offset_x, yp+label_offset_y), layer=pad_labels_layer))
 
     label_text = "C"
@@ -1846,7 +1862,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
     yp-=pad_y_spacing
     points = [(48, 185.9), (390, 185.9), (xp-pad_x_spacing-30, 185.9), (xp-pad_x_spacing-30, yp), (xp, yp)]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp+label_offset_x, yp+label_offset_y), layer=pad_labels_layer))
 
     label_text="F"
@@ -1856,11 +1872,11 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
     addition=c.add_ref(gf.path.extrude(gf.Path(points), width=1, layer=e_layer))
     addition1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=e_layer))
     addition1.connect(port='o1', other=addition.ports['o1'])
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp+label_offset_y),layer=pad_labels_layer))
 
-    c.add_ref(gf.components.straight(length=label_size, width=26, layer=e_layer)).dmovex(48).dmovey(130)
-    c.add_ref(gf.components.straight(length=label_size, width=26, layer=e_layer)).dmovex(48).dmovey(94)
+    c.add_ref(gf.components.straight(length=label_size, width=26)).dmovex(48).dmovey(130)
+    c.add_ref(gf.components.straight(length=label_size, width=26)).dmovex(48).dmovey(94)
 
     label_text = "G"
     xp += pad_x_spacing
@@ -1868,7 +1884,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
     points = [(53, 144), (49, 144), (49, 148), (122, 148), (122, 178), (xp-pad_x_spacing*2-30*2, 178), (xp-pad_x_spacing*2-30*2, yp+pad_y_spacing-30),
               (xp-pad_x_spacing-30, yp+pad_y_spacing-30),(xp-pad_x_spacing-30, yp), (xp, yp)]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp+label_offset_x, yp+label_offset_y), layer=pad_labels_layer))
 
     label_text = "H"
@@ -1887,7 +1903,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
         (xp, yp)
     ]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp +label_offset_y), layer=pad_labels_layer))
 
     points = [(50, 130), (45.2, 130), (45.2, 133.5)]
@@ -1918,7 +1934,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
         (xp, yp+30)
     ]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp +label_offset_y), layer=pad_labels_layer))
 
     points = [(53, 108), (49, 108), (49, 112)]
@@ -1952,7 +1968,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
         (xp, yp)
     ]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp +label_offset_y), layer=pad_labels_layer))
 
     # points = [(50, 94), (44.62, 94), (44.64, 97.54)]
@@ -1983,7 +1999,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
         (xp, yp)
     ]
     c.add_ref(gf.path.extrude(gf.Path(points), width=2.5, layer=e_layer))
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp +label_offset_y), layer=pad_labels_layer))
 
     label_text = "L"
@@ -2006,7 +2022,7 @@ def add_electrodes_to_coupon(coupon = gf.Component(), layers = None):
 
     t1 = c.add_ref(gf.components.taper(length=1, width1=1, width2=0.02, layer=e_layer))
     t1.connect(port='o1', other=p1.ports['o1'])
-    c.add_ref(gf.components.straight(length=150, width=pad_h, layer=e_layer)).move((xp, yp))
+    c.add_ref(gf.components.straight(length=150, width=pad_h)).move((xp, yp))
     c.add_ref(gf.components.text(text=label_text, size=label_size, position=(xp + label_offset_x, yp +label_offset_y), layer=pad_labels_layer))
 
     merged_layer = merge_layer(c, e_layer)
