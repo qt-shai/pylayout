@@ -41,8 +41,8 @@ GC_FILL = 0.623
 GC_BRIDGE = 0.075        # um (75 nm bridge)
 
 # GC cap (taper above the teeth)
-GC_CAP_H = 2.0           # um
-GC_CAP_W1 = 5.0          # um (top width)
+GC_CAP_H = 1.5           # um
+GC_CAP_W1 = 0.45         # um (top width)
 GC_CAP_SHIFT_HALF_PITCH = -0.5  # *GC_PERIOD (your current choice)
 
 INNER_INSET = 20.0  # um (distance between outer and inner loop walls)
